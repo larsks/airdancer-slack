@@ -9,4 +9,5 @@ dependencies = [
     "slack-cli-hooks>=0.1.0",
     "paho-mqtt>=2.1.0",
     "pony>=0.7.16",
+    "pytest>=7.0.0",
 ]

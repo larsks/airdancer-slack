@@ -15,7 +15,6 @@ from pony.orm import (
     Optional as PonyOptional,
     Set as PonySet,
     db_session,
-    select,
 )
 
 logging.basicConfig(level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO)
@@ -90,7 +89,7 @@ class DatabaseManager:
 
     def is_admin(self, slack_user_id: str) -> bool:
         user = self.get_user(slack_user_id)
-        return user and user["is_admin"]
+        return bool(user and user["is_admin"])
 
     @db_session
     def set_admin(self, slack_user_id: str, is_admin: bool) -> bool:
@@ -171,7 +170,7 @@ class DatabaseManager:
 
     @db_session
     def get_all_switches(self) -> List[Dict]:
-        switches = select(s for s in Switch)[:]
+        switches = list(Switch.select())
         return [
             {
                 "switch_id": switch.switch_id,
@@ -185,7 +184,7 @@ class DatabaseManager:
 
     @db_session
     def get_all_users(self) -> List[Dict]:
-        users = select(u for u in User)[:]
+        users = list(User.select())
         return [
             {
                 "slack_user_id": user.slack_user_id,
@@ -257,7 +256,7 @@ class DatabaseManager:
             return [
                 user["slack_user_id"]
                 for user in self.get_all_users()
-                if user["switch_id"]
+                if user["switch_id"] and user["switch_id"].strip()
             ]
 
         with db_session:
@@ -268,7 +267,7 @@ class DatabaseManager:
 
     @db_session
     def get_all_groups(self) -> List[str]:
-        groups = [group.group_name for group in select(g for g in Group)[:]]
+        groups = [group.group_name for group in list(Group.select())]
 
         # Always include the special 'all' group
         if "all" not in [g.lower() for g in groups]:
@@ -367,6 +366,9 @@ class MQTTManager:
             logger.info("Subscribing to switch power state topics: stat/+/POWER")
             client.subscribe("stat/+/POWER")
             logger.info("MQTT subscriptions completed, ready to discover switches")
+            
+            # Query power state for any switches with unknown state
+            self.query_unknown_power_states()
         else:
             logger.error(f"MQTT connection failed with reason code: {reason_code}")
 
@@ -411,6 +413,10 @@ class MQTTManager:
                 logger.info(f"   └─ Hostname: {device_info.get('hostname', 'unknown')}")
                 logger.info(f"   └─ MAC: {device_info.get('mac', 'unknown')}")
                 logger.info(f"   └─ Software: {device_info.get('software', 'unknown')}")
+                
+                # Query power state for newly discovered switch
+                logger.info(f"   └─ Querying power state for {switch_id}")
+                self.query_power_state(switch_id)
             elif switch_id:
                 logger.debug(f"Switch {switch_id} already discovered, ignoring")
         except Exception as e:
@@ -446,6 +452,22 @@ class MQTTManager:
     def switch_toggle(self, switch_id: str) -> bool:
         """Toggle switch state"""
         return self.send_command(switch_id, "Power1", "TOGGLE")
+
+    def query_power_state(self, switch_id: str) -> bool:
+        """Query current power state of switch"""
+        return self.send_command(switch_id, "Power", "")
+
+    def query_unknown_power_states(self):
+        """Query power state for all switches with unknown power state"""
+        switches = self.database.get_all_switches()
+        unknown_switches = [s for s in switches if s["power_state"] == "unknown"]
+        
+        if unknown_switches:
+            logger.info(f"Querying power state for {len(unknown_switches)} switches with unknown state")
+            for switch in unknown_switches:
+                switch_id = switch["switch_id"]
+                logger.info(f"   └─ Querying power state for {switch_id}")
+                self.query_power_state(switch_id)
 
 
 class AirdancerApp:
@@ -555,13 +577,18 @@ class AirdancerApp:
         # Handle direct messages and app mentions
         @self.app.message("")
         def handle_message(message, say, client):
+            # Skip if it's a bot message, empty, or other subtypes we don't handle
+            subtype = message.get("subtype")
+            if subtype in ["bot_message", "message_changed", "message_deleted"]:
+                return
+
             # Only respond to direct messages or app mentions
             channel_type = message.get("channel_type")
             text = message.get("text", "").strip()
-            user_id = message["user"]
+            user_id = message.get("user")
 
-            # Skip if it's a bot message or empty
-            if message.get("subtype") == "bot_message" or not text:
+            # Skip if no user or empty text
+            if not user_id or not text:
                 return
 
             # Only respond to DMs or app mentions
@@ -593,6 +620,16 @@ class AirdancerApp:
 
             # Parse the command
             self.handle_dm_command(text, user_id, say, client)
+
+        # Handle other message events gracefully
+        @self.app.event("message")
+        def handle_message_events(body, logger):
+            # This catches any message events not handled by the specific message handler above
+            event = body.get("event", {})
+            subtype = event.get("subtype")
+            if subtype:
+                logger.debug(f"Ignoring message event with subtype: {subtype}")
+            # No response needed - just prevent "unhandled request" warnings
 
     def handle_dm_command(self, text: str, user_id: str, say, client):
         """Handle direct message commands"""
@@ -804,14 +841,14 @@ class AirdancerApp:
 
     def bother_user(self, user_id: str, duration: int) -> bool:
         user = self.database.get_user(user_id)
-        if not user or not user["switch_id"]:
+        if not user or not user["switch_id"] or not user["switch_id"].strip():
             return False
 
         return self.mqtt_manager.bother_switch(user["switch_id"], duration)
 
     def handle_list_users(self, respond, user_id):
         users = self.database.get_all_users()
-        registered_users = [u for u in users if u["switch_id"]]
+        registered_users = [u for u in users if u["switch_id"] and u["switch_id"].strip()]
 
         if not registered_users:
             respond("No users are currently registered with switches.")
@@ -937,7 +974,7 @@ class AirdancerApp:
             for user in users:
                 admin_badge = " 👑" if user["is_admin"] else ""
                 switch_info = (
-                    f" (switch: `{user['switch_id']}`)" if user["switch_id"] else ""
+                    f" (switch: `{user['switch_id']}`)" if user["switch_id"] and user["switch_id"].strip() else ""
                 )
                 user_list.append(
                     f"• <@{user['slack_user_id']}>{admin_badge}{switch_info}"
@@ -965,7 +1002,7 @@ class AirdancerApp:
                 return
 
             admin_status = "Yes 👑" if user["is_admin"] else "No"
-            switch_status = user["switch_id"] if user["switch_id"] else "None"
+            switch_status = user["switch_id"] if user["switch_id"] and user["switch_id"].strip() else "None"
 
             respond(f"""*User Details:*
 • User: <@{user["slack_user_id"]}>

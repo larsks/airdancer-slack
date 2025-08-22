@@ -824,6 +824,7 @@ class AirdancerApp:
 • `register <switch> <user>` - register switch to specific user
 • `unregister <user>` - remove switch registration for user
 • `switch list` - list discovered switches
+• `switch show <switch>` - show detailed information for a switch
 • `switch on <switch>` - turn switch on
 • `switch off <switch>` - turn switch off
 • `switch toggle <switch>` - toggle switch state
@@ -1009,7 +1010,7 @@ class AirdancerApp:
             return
 
         if not args:
-            respond("Usage: `/dancer switch [list|on|off|toggle] [switch_id]`")
+            respond("Usage: `/dancer switch [list|show|on|off|toggle] [switch_id]`")
             return
 
         cmd = args[0].lower()
@@ -1160,6 +1161,154 @@ class AirdancerApp:
                     )
                 respond("*Discovered Switches:*\n" + "\n".join(switch_list))
 
+        elif cmd == "show":
+            if len(args) < 2:
+                respond("Usage: `/dancer switch show <switch_id>`")
+                return
+
+            switch_id = self.clean_switch_id(args[1])
+
+            # Get switch with owner information
+            switches = self.database.get_all_switches_with_owners()
+            switch_data = None
+            for switch in switches:
+                if switch["switch_id"] == switch_id:
+                    switch_data = switch
+                    break
+
+            if not switch_data:
+                respond(
+                    f"Switch `{switch_id}` not found. Use `/dancer switch list` to see available switches."
+                )
+                return
+
+            # Format switch information
+            status_emoji = "🟢" if switch_data["status"] == "online" else "🔴"
+            status_text = "Online" if switch_data["status"] == "online" else "Offline"
+
+            power_emoji = ""
+            power_text = ""
+            if switch_data["power_state"] == "ON":
+                power_emoji = "⚡"
+                power_text = "On"
+            elif switch_data["power_state"] == "OFF":
+                power_emoji = "⭕"
+                power_text = "Off"
+            elif switch_data["power_state"] == "unknown":
+                power_emoji = "❓"
+                power_text = "Unknown"
+
+            # Format last seen date
+            try:
+                last_seen = datetime.fromisoformat(switch_data["last_seen"])
+                last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
+            except (ValueError, TypeError):
+                last_seen_text = switch_data["last_seen"]
+
+            # Get switch owner information
+            owner = switch_data.get("owner")
+            if owner:
+                owner_text = f"<@{owner['slack_user_id']}>"
+                if owner["is_admin"]:
+                    owner_text += " 👑"
+            else:
+                owner_text = "_Unregistered_"
+
+            # Parse device info if available
+            device_details = ""
+            if switch_data["device_info"]:
+                try:
+                    device_info = json.loads(switch_data["device_info"])
+                    details = []
+                    if device_info.get("ip"):
+                        details.append(f"IP: {device_info['ip']}")
+                    if device_info.get("model"):
+                        details.append(f"Model: {device_info['model']}")
+                    if device_info.get("software"):
+                        details.append(f"Software: {device_info['software']}")
+                    if device_info.get("hostname"):
+                        details.append(f"Hostname: {device_info['hostname']}")
+                    if device_info.get("mac"):
+                        details.append(f"MAC: {device_info['mac']}")
+                    device_details = (
+                        "\n".join(details) if details else "No details available"
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    device_details = "Unable to parse device information"
+
+            # Create Block Kit layout for single switch
+            blocks = [
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": f"🔌 Switch: {switch_id}"},
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Status:*\n{status_emoji} {status_text}",
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Power:*\n{power_emoji} {power_text}",
+                        },
+                        {"type": "mrkdwn", "text": f"*Owner:*\n{owner_text}"},
+                        {"type": "mrkdwn", "text": f"*Last Seen:*\n{last_seen_text}"},
+                    ],
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Toggle"},
+                        "style": "primary",
+                        "action_id": f"toggle_switch_{switch_id}",
+                        "value": switch_id,
+                    },
+                },
+            ]
+
+            # Add device information section if available
+            if device_details:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Device Information:*\n```{device_details}```",
+                        },
+                    }
+                )
+
+            # Try different approaches for sending blocks
+            try:
+                # Method 1: Direct blocks parameter (for slash commands)
+                respond(blocks=blocks)
+            except TypeError:
+                try:
+                    # Method 2: Dictionary with blocks (for some response types)
+                    respond({"text": f"Switch: {switch_id}", "blocks": blocks})
+                except Exception:
+                    # Method 3: Fallback to text format
+                    logger.info("Blocks not supported, using text fallback")
+                    fallback_text = f"*Switch: `{switch_id}`*\n"
+                    fallback_text += f"• Status: {status_emoji} {status_text}\n"
+                    fallback_text += f"• Power: {power_emoji} {power_text}\n"
+                    fallback_text += f"• Owner: {owner_text}\n"
+                    fallback_text += f"• Last Seen: {last_seen_text}\n"
+                    if device_details:
+                        fallback_text += f"• Device Info:\n```{device_details}```"
+                    respond(fallback_text)
+            except Exception as e:
+                logger.warning(f"Failed to send blocks: {e}")
+                # Final fallback to text format
+                fallback_text = f"*Switch: `{switch_id}`*\n"
+                fallback_text += f"• Status: {status_emoji} {status_text}\n"
+                fallback_text += f"• Power: {power_emoji} {power_text}\n"
+                fallback_text += f"• Owner: {owner_text}\n"
+                fallback_text += f"• Last Seen: {last_seen_text}\n"
+                if device_details:
+                    fallback_text += f"• Device Info:\n```{device_details}```"
+                respond(fallback_text)
+
         elif cmd in ["on", "off", "toggle"]:
             if len(args) < 2:
                 respond(f"Usage: `/dancer switch {cmd} <switch_id>`")
@@ -1195,7 +1344,7 @@ class AirdancerApp:
                 respond(f"Failed to {cmd} switch `{switch_id}`. Check MQTT connection.")
 
         else:
-            respond("Usage: `/dancer switch [list|on|off|toggle] [switch_id]`")
+            respond("Usage: `/dancer switch [list|show|on|off|toggle] [switch_id]`")
 
     def handle_user_commands(self, respond, user_id, args, client):
         logger.info(f"🔍 handle_user_commands called: user_id={user_id}, args={args}")

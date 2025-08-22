@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import re
+import argparse
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -594,25 +595,35 @@ class AirdancerApp:
             respond("Failed to unregister user or user not found.")
 
     def handle_bother(self, respond, user_id, args, client):
-        duration = 15  # default duration in seconds
-        target = None
+        # Create argument parser
+        parser = argparse.ArgumentParser(
+            prog="bother",
+            description="Activate switch for user or group",
+            add_help=False,  # We'll handle help ourselves
+            exit_on_error=False,  # Don't call sys.exit on error
+        )
+        parser.add_argument(
+            "--duration",
+            "-d",
+            type=int,
+            default=15,
+            help="Duration in seconds (default: 15)",
+        )
+        parser.add_argument("target", help="Target user or group to bother")
 
-        # Parse arguments
-        i = 0
-        while i < len(args):
-            if args[i] == "--duration" and i + 1 < len(args):
-                try:
-                    duration = int(args[i + 1])
-                    i += 2
-                except ValueError:
-                    respond("Invalid duration value.")
-                    return
-            else:
-                target = args[i]
-                break
+        try:
+            parsed_args = parser.parse_args(args)
+            duration = parsed_args.duration
+            target = parsed_args.target
+        except Exception as e:
+            # Handle other parsing errors
+            error_msg = str(e)
+            respond(f"Error parsing arguments: {error_msg}")
+            return
 
-        if not target:
-            respond("Usage: `/dancer bother [--duration <n>] (<user>|<group>)`")
+        # Validate duration
+        if duration <= 0:
+            respond("Duration must be a positive number.")
             return
 
         # First check if target is a group name

@@ -183,6 +183,41 @@ class DatabaseManager:
         ]
 
     @db_session
+    def get_all_switches_with_owners(self) -> List[Dict]:
+        """Get all switches with their owner information using a join"""
+        # Get all switches with left join to users
+        query = """
+        SELECT s.switch_id, s.status, s.power_state, s.last_seen, s.device_info,
+               u.slack_user_id, u.username, u.is_admin
+        FROM switch s
+        LEFT JOIN user u ON s.switch_id = u.switch_id
+        ORDER BY s.switch_id
+        """
+        
+        results = []
+        for row in db.execute(query):
+            switch_data = {
+                "switch_id": row[0],
+                "status": row[1],
+                "power_state": row[2],
+                "last_seen": row[3],
+                "device_info": row[4],
+                "owner": None
+            }
+            
+            # If there's an owner (user data is not null)
+            if row[5]:  # slack_user_id is not None
+                switch_data["owner"] = {
+                    "slack_user_id": row[5],
+                    "username": row[6],
+                    "is_admin": bool(row[7])
+                }
+            
+            results.append(switch_data)
+        
+        return results
+
+    @db_session
     def get_all_users(self) -> List[Dict]:
         users = list(User.select())
         return [
@@ -274,6 +309,19 @@ class DatabaseManager:
             groups.append("all")
 
         return groups
+
+    @db_session
+    def get_switch_owner(self, switch_id: str) -> Optional[Dict]:
+        """Get the user who owns the specified switch"""
+        user = User.get(switch_id=switch_id)
+        if user:
+            return {
+                "slack_user_id": user.slack_user_id,
+                "username": user.username,
+                "is_admin": user.is_admin,
+                "created_at": user.created_at.isoformat(),
+            }
+        return None
 
 
 class MQTTManager:
@@ -889,28 +937,144 @@ class AirdancerApp:
         cmd = args[0].lower()
 
         if cmd == "list":
-            switches = self.database.get_all_switches()
+            switches = self.database.get_all_switches_with_owners()
 
             if not switches:
                 respond("No switches have been discovered.")
                 return
 
-            switch_list = []
+            # Create Block Kit layout for switch list
+            blocks = [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "🔌 Discovered Switches"
+                    }
+                }
+            ]
+
             for switch in switches:
                 status_emoji = "🟢" if switch["status"] == "online" else "🔴"
+                status_text = "Online" if switch["status"] == "online" else "Offline"
+                
                 power_emoji = ""
+                power_text = ""
                 if switch["power_state"] == "ON":
-                    power_emoji = " ⚡"
+                    power_emoji = "⚡"
+                    power_text = "On"
                 elif switch["power_state"] == "OFF":
-                    power_emoji = " ⭕"
+                    power_emoji = "⭕"
+                    power_text = "Off"
                 elif switch["power_state"] == "unknown":
-                    power_emoji = " ❓"
+                    power_emoji = "❓"
+                    power_text = "Unknown"
 
-                switch_list.append(
-                    f"• `{switch['switch_id']}` {status_emoji}{power_emoji} (last seen: {switch['last_seen']})"
-                )
+                # Format last seen date nicely
+                try:
+                    last_seen = datetime.fromisoformat(switch['last_seen'])
+                    last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError):
+                    last_seen_text = switch['last_seen']
 
-            respond("*Discovered Switches:*\n" + "\n".join(switch_list))
+                # Get switch owner information (now included in switch data)
+                owner = switch.get('owner')
+                if owner:
+                    owner_text = f"<@{owner['slack_user_id']}>"
+                    if owner['is_admin']:
+                        owner_text += " 👑"
+                else:
+                    owner_text = "_Unregistered_"
+
+                # Add section block for each switch
+                switch_block = {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Switch ID:*\n`{switch['switch_id']}`"
+                        },
+                        {
+                            "type": "mrkdwn", 
+                            "text": f"*Status:*\n{status_emoji} {status_text}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Power:*\n{power_emoji} {power_text}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Owner:*\n{owner_text}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Last Seen:*\n{last_seen_text}"
+                        }
+                    ]
+                }
+                
+                blocks.append(switch_block)
+
+                # Add divider between switches (except for the last one)
+                if switch != switches[-1]:
+                    blocks.append({"type": "divider"})
+
+            # Try different approaches for sending blocks
+            try:
+                # Method 1: Direct blocks parameter (for slash commands)
+                respond(blocks=blocks)
+            except TypeError:
+                try:
+                    # Method 2: Dictionary with blocks (for some response types)  
+                    respond({"text": "Discovered Switches", "blocks": blocks})
+                except Exception:
+                    # Method 3: Fallback to text format
+                    logger.info("Blocks not supported, using text fallback")
+                    switch_list = []
+                    for switch in switches:
+                        status_emoji = "🟢" if switch["status"] == "online" else "🔴"
+                        power_emoji = ""
+                        if switch["power_state"] == "ON":
+                            power_emoji = " ⚡"
+                        elif switch["power_state"] == "OFF":
+                            power_emoji = " ⭕"
+                        elif switch["power_state"] == "unknown":
+                            power_emoji = " ❓"
+
+                        # Get owner info for text fallback (now included in switch data)
+                        owner = switch.get('owner')
+                        owner_text = f" - <@{owner['slack_user_id']}>" if owner else " - _Unregistered_"
+                        if owner and owner['is_admin']:
+                            owner_text += " 👑"
+
+                        switch_list.append(
+                            f"• `{switch['switch_id']}` {status_emoji}{power_emoji}{owner_text} (last seen: {switch['last_seen']})"
+                        )
+                    respond("*Discovered Switches:*\n" + "\n".join(switch_list))
+            except Exception as e:
+                logger.warning(f"Failed to send blocks: {e}")
+                # Final fallback to text format
+                switch_list = []
+                for switch in switches:
+                    status_emoji = "🟢" if switch["status"] == "online" else "🔴"
+                    power_emoji = ""
+                    if switch["power_state"] == "ON":
+                        power_emoji = " ⚡"
+                    elif switch["power_state"] == "OFF":
+                        power_emoji = " ⭕"
+                    elif switch["power_state"] == "unknown":
+                        power_emoji = " ❓"
+
+                    # Get owner info for final fallback (now included in switch data)
+                    owner = switch.get('owner')
+                    owner_text = f" - <@{owner['slack_user_id']}>" if owner else " - _Unregistered_"
+                    if owner and owner['is_admin']:
+                        owner_text += " 👑"
+
+                    switch_list.append(
+                        f"• `{switch['switch_id']}` {status_emoji}{power_emoji}{owner_text} (last seen: {switch['last_seen']})"
+                    )
+                respond("*Discovered Switches:*\n" + "\n".join(switch_list))
 
         elif cmd in ["on", "off", "toggle"]:
             if len(args) < 2:

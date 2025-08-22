@@ -1,5 +1,22 @@
 {
   "hooks": {
-    "get-hooks": "python3 -m slack_cli_hooks.hooks.get_hooks"
-  }
+    "get-manifest": "'/home/lars/projects/airdancer-slack/.venv/bin/python3' -m slack_cli_hooks.hooks.get_manifest",
+    "start": "'/home/lars/projects/airdancer-slack/.venv/bin/python3' -X dev -m slack_cli_hooks.hooks.start",
+    "check-update": "'/home/lars/projects/airdancer-slack/.venv/bin/python3' -m slack_cli_hooks.hooks.check_update",
+    "doctor": "'/home/lars/projects/airdancer-slack/.venv/bin/python3' -m slack_cli_hooks.hooks.doctor"
+  },
+  "config": {
+    "watch": {
+      "filter-regex": "(^manifest\\.json$)",
+      "paths": [
+        "."
+      ]
+    },
+    "protocol-version": [
+      "message-boundaries",
+      "default"
+    ],
+    "sdk-managed-connection-enabled": true
+  },
+  "runtime": "python"
 }

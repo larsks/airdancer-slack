@@ -6,4 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "slack-bolt>=1.23.0",
+    "slack-cli-hooks>=0.1.0",
+    "paho-mqtt>=2.1.0",
+    "pony>=0.7.16",
 ]

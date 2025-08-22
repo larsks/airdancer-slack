@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime
 from pony.orm import db_session, Database, Required, Optional, Set
 
-from app import DatabaseManager
+from app import UserDict, SwitchDict, OwnerDict, SwitchWithOwnerDict
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def temp_db():
                 return False
 
         @db_session
-        def get_user(self, slack_user_id: str):
+        def get_user(self, slack_user_id: str) -> UserDict | None:
             user = self.User.get(slack_user_id=slack_user_id)
             if user:
                 return {
@@ -164,7 +164,7 @@ def temp_db():
                 return False
 
         @db_session
-        def get_all_switches(self):
+        def get_all_switches(self) -> list[SwitchDict]:
             switches = list(self.Switch.select())
             return [
                 {
@@ -178,7 +178,7 @@ def temp_db():
             ]
 
         @db_session
-        def get_all_users(self):
+        def get_all_users(self) -> list[UserDict]:
             users = list(self.User.select())
             return [
                 {
@@ -266,7 +266,7 @@ def temp_db():
             return groups
 
         @db_session
-        def get_switch_owner(self, switch_id: str):
+        def get_switch_owner(self, switch_id: str) -> OwnerDict | None:
             """Get the user who owns the specified switch"""
             user = self.User.get(switch_id=switch_id)
             if user:
@@ -274,19 +274,18 @@ def temp_db():
                     "slack_user_id": user.slack_user_id,
                     "username": user.username,
                     "is_admin": user.is_admin,
-                    "created_at": user.created_at.isoformat(),
                 }
             return None
 
         @db_session
-        def get_all_switches_with_owners(self):
+        def get_all_switches_with_owners(self) -> list[SwitchWithOwnerDict]:
             """Get all switches with their owner information using a join (mock version)"""
             # For testing, we'll simulate the join using our existing entities
             switches = list(self.Switch.select())
             results = []
             
             for switch in switches:
-                switch_data = {
+                switch_data: SwitchWithOwnerDict = {
                     "switch_id": switch.switch_id,
                     "status": switch.status,
                     "power_state": switch.power_state,
@@ -315,7 +314,7 @@ def temp_db():
     # Cleanup
     try:
         os.unlink(temp_db_path)
-    except:
+    except OSError:
         pass
 
 

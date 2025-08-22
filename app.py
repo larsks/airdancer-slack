@@ -3,6 +3,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from typing import TypedDict
 from urllib.parse import urlparse
 
 import paho.mqtt.client as mqtt
@@ -18,6 +19,38 @@ from pony.orm import (
 
 logging.basicConfig(level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Type definitions for database objects
+class UserDict(TypedDict):
+    slack_user_id: str
+    username: str
+    is_admin: bool
+    switch_id: str
+    created_at: str
+
+
+class SwitchDict(TypedDict):
+    switch_id: str
+    status: str
+    power_state: str
+    last_seen: str
+    device_info: str
+
+
+class OwnerDict(TypedDict):
+    slack_user_id: str
+    username: str
+    is_admin: bool
+
+
+class SwitchWithOwnerDict(TypedDict):
+    switch_id: str
+    status: str
+    power_state: str
+    last_seen: str
+    device_info: str
+    owner: OwnerDict | None
 
 
 # Initialize PonyORM database
@@ -74,7 +107,7 @@ class DatabaseManager:
             return False
 
     @db_session
-    def get_user(self, slack_user_id: str) -> dict | None:
+    def get_user(self, slack_user_id: str) -> UserDict | None:
         user = User.get(slack_user_id=slack_user_id)
         if user:
             return {
@@ -168,7 +201,7 @@ class DatabaseManager:
             return False
 
     @db_session
-    def get_all_switches(self) -> list[dict]:
+    def get_all_switches(self) -> list[SwitchDict]:
         switches = list(Switch.select())
         return [
             {
@@ -182,7 +215,7 @@ class DatabaseManager:
         ]
 
     @db_session
-    def get_all_switches_with_owners(self) -> list[dict]:
+    def get_all_switches_with_owners(self) -> list[SwitchWithOwnerDict]:
         """Get all switches with their owner information using a join"""
         # Get all switches with left join to users
         query = """
@@ -217,7 +250,7 @@ class DatabaseManager:
         return results
 
     @db_session
-    def get_all_users(self) -> list[dict]:
+    def get_all_users(self) -> list[UserDict]:
         users = list(User.select())
         return [
             {
@@ -310,7 +343,7 @@ class DatabaseManager:
         return groups
 
     @db_session
-    def get_switch_owner(self, switch_id: str) -> dict | None:
+    def get_switch_owner(self, switch_id: str) -> OwnerDict | None:
         """Get the user who owns the specified switch"""
         user = User.get(switch_id=switch_id)
         if user:
@@ -318,7 +351,6 @@ class DatabaseManager:
                 "slack_user_id": user.slack_user_id,
                 "username": user.username,
                 "is_admin": user.is_admin,
-                "created_at": user.created_at.isoformat(),
             }
         return None
 

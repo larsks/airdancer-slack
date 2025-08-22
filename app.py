@@ -712,6 +712,49 @@ class AirdancerApp:
                 logger.debug(f"Ignoring message event with subtype: {subtype}")
             # No response needed - just prevent "unhandled request" warnings
 
+        # Handle toggle button actions
+        @self.app.action(re.compile(r"toggle_switch_.*"))
+        def handle_toggle_switch(ack, body, client):
+            ack()
+
+            user_id = body["user"]["id"]
+            action = body["actions"][0]
+            switch_id = action["value"]
+
+            logger.info(f"Toggle button pressed by {user_id} for switch {switch_id}")
+
+            # Check if user is admin (only admins can toggle switches)
+            if not self.database.is_admin(user_id):
+                try:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text="❌ Only administrators can toggle switches.",
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending ephemeral message: {e}")
+                return
+
+            # Send toggle command
+            success = self.mqtt_manager.send_command(switch_id, "Power", "toggle")
+
+            # Send response
+            try:
+                if success:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text=f"✅ Toggle command sent to switch `{switch_id}`",
+                    )
+                else:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text=f"❌ Failed to send toggle command to switch `{switch_id}`",
+                    )
+            except Exception as e:
+                logger.error(f"Error sending toggle response: {e}")
+
     def handle_dm_command(self, text: str, user_id: str, say, client):
         """Handle direct message commands"""
         args = text.split() if text else []
@@ -1018,7 +1061,7 @@ class AirdancerApp:
                 else:
                     owner_text = "_Unregistered_"
 
-                # Add section block for each switch
+                # Add section block for each switch with toggle button
                 switch_block = {
                     "type": "section",
                     "fields": [
@@ -1037,6 +1080,13 @@ class AirdancerApp:
                         {"type": "mrkdwn", "text": f"*Owner:*\n{owner_text}"},
                         {"type": "mrkdwn", "text": f"*Last Seen:*\n{last_seen_text}"},
                     ],
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Toggle"},
+                        "style": "primary",
+                        "action_id": f"toggle_switch_{switch['switch_id']}",
+                        "value": switch["switch_id"],
+                    },
                 }
 
                 blocks.append(switch_block)

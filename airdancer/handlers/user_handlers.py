@@ -1,0 +1,223 @@
+"""User command handlers"""
+
+import logging
+from typing import Dict
+from .base import BaseCommand, CommandContext
+from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
+from ..utils.parsers import create_bother_parser
+from ..utils.formatters import clean_switch_id
+
+logger = logging.getLogger(__name__)
+
+
+class UserCommandHandler:
+    """Handler for user commands"""
+
+    def __init__(
+        self,
+        database_service: DatabaseServiceInterface,
+        mqtt_service: MQTTServiceInterface,
+    ):
+        self.database_service = database_service
+        self.mqtt_service = mqtt_service
+        self.commands: Dict[str, BaseCommand] = {
+            "register": RegisterCommand(database_service),
+            "bother": BotherCommand(database_service, mqtt_service),
+            "users": ListUsersCommand(database_service),
+            "groups": ListGroupsCommand(database_service),
+        }
+
+    def handle_command(self, command: str, context: CommandContext) -> None:
+        """Handle a user command"""
+        if command in self.commands:
+            cmd_handler = self.commands[command]
+            if cmd_handler.can_execute(context):
+                cmd_handler.execute(context)
+            else:
+                context.respond(f"Cannot execute command: {command}")
+        else:
+            context.respond(f"Unknown command: {command}")
+
+
+class RegisterCommand(BaseCommand):
+    """Handle user registration of switches"""
+
+    def __init__(self, database_service: DatabaseServiceInterface):
+        self.database_service = database_service
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Check if register command can be executed"""
+        return len(context.args) >= 1
+
+    def execute(self, context: CommandContext) -> None:
+        """Execute register command"""
+        if len(context.args) != 1:
+            context.respond("Usage: `register <switch>`")
+            return
+
+        switch_id = clean_switch_id(context.args[0])
+
+        # Check if switch is already registered
+        if self.database_service.is_switch_registered(switch_id):
+            owner = self.database_service.get_switch_owner(switch_id)
+            if owner and owner.slack_user_id == context.user_id:
+                context.respond(
+                    f"Switch `{switch_id}` is already registered to your account."
+                )
+            else:
+                context.respond(
+                    f"Switch `{switch_id}` is already registered to another user. "
+                    "Please contact an administrator if you believe this is an error."
+                )
+            return
+
+        if self.database_service.register_switch(context.user_id, switch_id):
+            context.respond(
+                f"Successfully registered switch `{switch_id}` to your account."
+            )
+        else:
+            context.respond("Failed to register switch. Make sure you have an account.")
+
+
+class BotherCommand(BaseCommand):
+    """Handle bother command with argparse"""
+
+    def __init__(
+        self,
+        database_service: DatabaseServiceInterface,
+        mqtt_service: MQTTServiceInterface,
+    ):
+        self.database_service = database_service
+        self.mqtt_service = mqtt_service
+        self.parser = create_bother_parser()
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Check if bother command can be executed"""
+        return len(context.args) >= 1
+
+    def execute(self, context: CommandContext) -> None:
+        """Execute bother command"""
+        try:
+            parsed_args = self.parser.parse_args(context.args)
+            duration = parsed_args.duration
+            target = parsed_args.target
+        except Exception as e:
+            error_msg = str(e)
+            if "unrecognized arguments:" in error_msg:
+                context.respond(
+                    "Invalid arguments. Usage: `bother [--duration <n>] (<user>|<group>)`"
+                )
+            elif "the following arguments are required: target" in error_msg:
+                context.respond("Usage: `bother [--duration <n>] (<user>|<group>)`")
+            else:
+                context.respond(f"Error parsing arguments: {error_msg}")
+            return
+
+        # Validate duration
+        if duration <= 0:
+            context.respond("Duration must be a positive number.")
+            return
+
+        # Check if target is a group
+        available_groups = self.database_service.get_all_groups()
+        if target.lower() in [g.lower() for g in available_groups]:
+            self._bother_group(target, duration, context)
+        else:
+            self._bother_user(target, duration, context)
+
+    def _bother_group(
+        self, group_name: str, duration: int, context: CommandContext
+    ) -> None:
+        """Bother all members of a group"""
+        members = self.database_service.get_group_members(group_name)
+        if not members:
+            if group_name.lower() == "all":
+                context.respond(
+                    f"Group `{group_name}` has no members (no users have registered switches)."
+                )
+            else:
+                context.respond(f"Group `{group_name}` has no members.")
+            return
+
+        bothered_count = 0
+        for member_id in members:
+            if self._bother_user_by_id(member_id, duration):
+                bothered_count += 1
+
+        context.respond(
+            f"Bothered {bothered_count} members of group `{group_name}` for {duration} seconds."
+        )
+
+    def _bother_user(self, target: str, duration: int, context: CommandContext) -> None:
+        """Bother a specific user"""
+        # This is simplified - in real implementation, you'd resolve user identifier
+        # For now, assume target is a user ID
+        if self._bother_user_by_id(target, duration):
+            context.respond(f"Successfully bothered user for {duration} seconds.")
+        else:
+            context.respond(
+                "Failed to bother user. They may not have a registered switch."
+            )
+
+    def _bother_user_by_id(self, user_id: str, duration: int) -> bool:
+        """Bother user by their ID"""
+        user = self.database_service.get_user(user_id)
+        if not user or not user.switch_id or not user.switch_id.strip():
+            return False
+
+        return self.mqtt_service.bother_switch(user.switch_id, duration)
+
+
+class ListUsersCommand(BaseCommand):
+    """List registered users"""
+
+    def __init__(self, database_service: DatabaseServiceInterface):
+        self.database_service = database_service
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Anyone can list users"""
+        return True
+
+    def execute(self, context: CommandContext) -> None:
+        """List users with registered switches"""
+        users = self.database_service.get_all_users()
+        registered_users = [u for u in users if u.switch_id and u.switch_id.strip()]
+
+        if not registered_users:
+            context.respond("No users are currently registered with switches.")
+            return
+
+        user_list = []
+        for user in registered_users:
+            admin_badge = " 👑" if user.is_admin else ""
+            user_list.append(
+                f"• <@{user.slack_user_id}> (switch: `{user.switch_id}`){admin_badge}"
+            )
+
+        context.respond("*Registered Users:*\n" + "\n".join(user_list))
+
+
+class ListGroupsCommand(BaseCommand):
+    """List available groups"""
+
+    def __init__(self, database_service: DatabaseServiceInterface):
+        self.database_service = database_service
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Anyone can list groups"""
+        return True
+
+    def execute(self, context: CommandContext) -> None:
+        """List all groups"""
+        groups = self.database_service.get_all_groups()
+
+        if not groups:
+            context.respond("No groups have been created.")
+            return
+
+        group_list = []
+        for group in groups:
+            member_count = len(self.database_service.get_group_members(group))
+            group_list.append(f"• `{group}` ({member_count} members)")
+
+        context.respond("*Available Groups:*\n" + "\n".join(group_list))

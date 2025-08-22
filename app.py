@@ -3,7 +3,6 @@ import json
 import logging
 import re
 from datetime import datetime
-from typing import Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import paho.mqtt.client as mqtt
@@ -12,7 +11,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from pony.orm import (
     Database,
     Required,
-    Optional as PonyOptional,
+    Optional,
     Set as PonySet,
     db_session,
 )
@@ -29,7 +28,7 @@ class User(db.Entity):
     slack_user_id = Required(str, unique=True)
     username = Required(str)
     is_admin = Required(bool, default=False)
-    switch_id = PonyOptional(str)
+    switch_id = Optional(str)
     created_at = Required(datetime, default=datetime.now)
     groups = PonySet("GroupMember")
 
@@ -39,7 +38,7 @@ class Switch(db.Entity):
     status = Required(str, default="offline")
     power_state = Required(str, default="unknown")
     last_seen = Required(datetime, default=datetime.now)
-    device_info = PonyOptional(str)
+    device_info = Optional(str)
 
 
 class Group(db.Entity):
@@ -75,7 +74,7 @@ class DatabaseManager:
             return False
 
     @db_session
-    def get_user(self, slack_user_id: str) -> Optional[Dict]:
+    def get_user(self, slack_user_id: str) -> dict | None:
         user = User.get(slack_user_id=slack_user_id)
         if user:
             return {
@@ -169,7 +168,7 @@ class DatabaseManager:
             return False
 
     @db_session
-    def get_all_switches(self) -> List[Dict]:
+    def get_all_switches(self) -> list[dict]:
         switches = list(Switch.select())
         return [
             {
@@ -183,7 +182,7 @@ class DatabaseManager:
         ]
 
     @db_session
-    def get_all_switches_with_owners(self) -> List[Dict]:
+    def get_all_switches_with_owners(self) -> list[dict]:
         """Get all switches with their owner information using a join"""
         # Get all switches with left join to users
         query = """
@@ -193,7 +192,7 @@ class DatabaseManager:
         LEFT JOIN user u ON s.switch_id = u.switch_id
         ORDER BY s.switch_id
         """
-        
+
         results = []
         for row in db.execute(query):
             switch_data = {
@@ -202,23 +201,23 @@ class DatabaseManager:
                 "power_state": row[2],
                 "last_seen": row[3],
                 "device_info": row[4],
-                "owner": None
+                "owner": None,
             }
-            
+
             # If there's an owner (user data is not null)
             if row[5]:  # slack_user_id is not None
                 switch_data["owner"] = {
                     "slack_user_id": row[5],
                     "username": row[6],
-                    "is_admin": bool(row[7])
+                    "is_admin": bool(row[7]),
                 }
-            
+
             results.append(switch_data)
-        
+
         return results
 
     @db_session
-    def get_all_users(self) -> List[Dict]:
+    def get_all_users(self) -> list[dict]:
         users = list(User.select())
         return [
             {
@@ -285,7 +284,7 @@ class DatabaseManager:
             logger.error(f"Error removing user from group: {e}")
             return False
 
-    def get_group_members(self, group_name: str) -> List[str]:
+    def get_group_members(self, group_name: str) -> list[str]:
         # Handle special 'all' group
         if group_name.lower() == "all":
             return [
@@ -301,7 +300,7 @@ class DatabaseManager:
             return []
 
     @db_session
-    def get_all_groups(self) -> List[str]:
+    def get_all_groups(self) -> list[str]:
         groups = [group.group_name for group in list(Group.select())]
 
         # Always include the special 'all' group
@@ -311,7 +310,7 @@ class DatabaseManager:
         return groups
 
     @db_session
-    def get_switch_owner(self, switch_id: str) -> Optional[Dict]:
+    def get_switch_owner(self, switch_id: str) -> dict | None:
         """Get the user who owns the specified switch"""
         user = User.get(switch_id=switch_id)
         if user:
@@ -330,7 +329,7 @@ class MQTTManager:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
-        self.discovered_switches: Set[str] = set()
+        self.discovered_switches: set[str] = set()
 
         # MQTT configuration from environment variables
         self.mqtt_host = "localhost"
@@ -414,7 +413,7 @@ class MQTTManager:
             logger.info("Subscribing to switch power state topics: stat/+/POWER")
             client.subscribe("stat/+/POWER")
             logger.info("MQTT subscriptions completed, ready to discover switches")
-            
+
             # Query power state for any switches with unknown state
             self.query_unknown_power_states()
         else:
@@ -461,7 +460,7 @@ class MQTTManager:
                 logger.info(f"   └─ Hostname: {device_info.get('hostname', 'unknown')}")
                 logger.info(f"   └─ MAC: {device_info.get('mac', 'unknown')}")
                 logger.info(f"   └─ Software: {device_info.get('software', 'unknown')}")
-                
+
                 # Query power state for newly discovered switch
                 logger.info(f"   └─ Querying power state for {switch_id}")
                 self.query_power_state(switch_id)
@@ -509,9 +508,11 @@ class MQTTManager:
         """Query power state for all switches with unknown power state"""
         switches = self.database.get_all_switches()
         unknown_switches = [s for s in switches if s["power_state"] == "unknown"]
-        
+
         if unknown_switches:
-            logger.info(f"Querying power state for {len(unknown_switches)} switches with unknown state")
+            logger.info(
+                f"Querying power state for {len(unknown_switches)} switches with unknown state"
+            )
             for switch in unknown_switches:
                 switch_id = switch["switch_id"]
                 logger.info(f"   └─ Querying power state for {switch_id}")
@@ -896,7 +897,9 @@ class AirdancerApp:
 
     def handle_list_users(self, respond, user_id):
         users = self.database.get_all_users()
-        registered_users = [u for u in users if u["switch_id"] and u["switch_id"].strip()]
+        registered_users = [
+            u for u in users if u["switch_id"] and u["switch_id"].strip()
+        ]
 
         if not registered_users:
             respond("No users are currently registered with switches.")
@@ -947,17 +950,14 @@ class AirdancerApp:
             blocks = [
                 {
                     "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "🔌 Discovered Switches"
-                    }
+                    "text": {"type": "plain_text", "text": "🔌 Discovered Switches"},
                 }
             ]
 
             for switch in switches:
                 status_emoji = "🟢" if switch["status"] == "online" else "🔴"
                 status_text = "Online" if switch["status"] == "online" else "Offline"
-                
+
                 power_emoji = ""
                 power_text = ""
                 if switch["power_state"] == "ON":
@@ -972,16 +972,16 @@ class AirdancerApp:
 
                 # Format last seen date nicely
                 try:
-                    last_seen = datetime.fromisoformat(switch['last_seen'])
+                    last_seen = datetime.fromisoformat(switch["last_seen"])
                     last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
                 except (ValueError, TypeError):
-                    last_seen_text = switch['last_seen']
+                    last_seen_text = switch["last_seen"]
 
                 # Get switch owner information (now included in switch data)
-                owner = switch.get('owner')
+                owner = switch.get("owner")
                 if owner:
                     owner_text = f"<@{owner['slack_user_id']}>"
-                    if owner['is_admin']:
+                    if owner["is_admin"]:
                         owner_text += " 👑"
                 else:
                     owner_text = "_Unregistered_"
@@ -992,27 +992,21 @@ class AirdancerApp:
                     "fields": [
                         {
                             "type": "mrkdwn",
-                            "text": f"*Switch ID:*\n`{switch['switch_id']}`"
-                        },
-                        {
-                            "type": "mrkdwn", 
-                            "text": f"*Status:*\n{status_emoji} {status_text}"
+                            "text": f"*Switch ID:*\n`{switch['switch_id']}`",
                         },
                         {
                             "type": "mrkdwn",
-                            "text": f"*Power:*\n{power_emoji} {power_text}"
+                            "text": f"*Status:*\n{status_emoji} {status_text}",
                         },
                         {
                             "type": "mrkdwn",
-                            "text": f"*Owner:*\n{owner_text}"
+                            "text": f"*Power:*\n{power_emoji} {power_text}",
                         },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Last Seen:*\n{last_seen_text}"
-                        }
-                    ]
+                        {"type": "mrkdwn", "text": f"*Owner:*\n{owner_text}"},
+                        {"type": "mrkdwn", "text": f"*Last Seen:*\n{last_seen_text}"},
+                    ],
                 }
-                
+
                 blocks.append(switch_block)
 
                 # Add divider between switches (except for the last one)
@@ -1025,7 +1019,7 @@ class AirdancerApp:
                 respond(blocks=blocks)
             except TypeError:
                 try:
-                    # Method 2: Dictionary with blocks (for some response types)  
+                    # Method 2: Dictionary with blocks (for some response types)
                     respond({"text": "Discovered Switches", "blocks": blocks})
                 except Exception:
                     # Method 3: Fallback to text format
@@ -1042,9 +1036,13 @@ class AirdancerApp:
                             power_emoji = " ❓"
 
                         # Get owner info for text fallback (now included in switch data)
-                        owner = switch.get('owner')
-                        owner_text = f" - <@{owner['slack_user_id']}>" if owner else " - _Unregistered_"
-                        if owner and owner['is_admin']:
+                        owner = switch.get("owner")
+                        owner_text = (
+                            f" - <@{owner['slack_user_id']}>"
+                            if owner
+                            else " - _Unregistered_"
+                        )
+                        if owner and owner["is_admin"]:
                             owner_text += " 👑"
 
                         switch_list.append(
@@ -1066,9 +1064,13 @@ class AirdancerApp:
                         power_emoji = " ❓"
 
                     # Get owner info for final fallback (now included in switch data)
-                    owner = switch.get('owner')
-                    owner_text = f" - <@{owner['slack_user_id']}>" if owner else " - _Unregistered_"
-                    if owner and owner['is_admin']:
+                    owner = switch.get("owner")
+                    owner_text = (
+                        f" - <@{owner['slack_user_id']}>"
+                        if owner
+                        else " - _Unregistered_"
+                    )
+                    if owner and owner["is_admin"]:
                         owner_text += " 👑"
 
                     switch_list.append(
@@ -1138,7 +1140,9 @@ class AirdancerApp:
             for user in users:
                 admin_badge = " 👑" if user["is_admin"] else ""
                 switch_info = (
-                    f" (switch: `{user['switch_id']}`)" if user["switch_id"] and user["switch_id"].strip() else ""
+                    f" (switch: `{user['switch_id']}`)"
+                    if user["switch_id"] and user["switch_id"].strip()
+                    else ""
                 )
                 user_list.append(
                     f"• <@{user['slack_user_id']}>{admin_badge}{switch_info}"
@@ -1166,7 +1170,11 @@ class AirdancerApp:
                 return
 
             admin_status = "Yes 👑" if user["is_admin"] else "No"
-            switch_status = user["switch_id"] if user["switch_id"] and user["switch_id"].strip() else "None"
+            switch_status = (
+                user["switch_id"]
+                if user["switch_id"] and user["switch_id"].strip()
+                else "None"
+            )
 
             respond(f"""*User Details:*
 • User: <@{user["slack_user_id"]}>
@@ -1343,7 +1351,7 @@ class AirdancerApp:
             cleaned = cleaned[1:-1]
         return cleaned.strip()
 
-    def resolve_user_identifier(self, user_str: str, client) -> Optional[str]:
+    def resolve_user_identifier(self, user_str: str, client) -> str | None:
         """
         Resolve a user identifier (mention, username, or user ID) to a Slack user ID
         Returns None if user cannot be found

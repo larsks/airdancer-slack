@@ -132,10 +132,19 @@ class DatabaseManager:
     def register_switch(self, slack_user_id: str, switch_id: str) -> bool:
         try:
             user = User.get(slack_user_id=slack_user_id)
-            if user:
-                user.switch_id = switch_id
-                return True
-            return False
+            if not user:
+                return False
+
+            # Check if switch is already registered to another user
+            existing_user = User.get(switch_id=switch_id)
+            if existing_user and existing_user.slack_user_id != slack_user_id:
+                logger.warning(
+                    f"Switch {switch_id} is already registered to user {existing_user.slack_user_id}"
+                )
+                return False
+
+            user.switch_id = switch_id
+            return True
         except Exception as e:
             logger.error(f"Error registering switch: {e}")
             return False
@@ -346,3 +355,8 @@ class DatabaseManager:
                 "is_admin": user.is_admin,
             }
         return None
+
+    @db_session
+    def is_switch_registered(self, switch_id: str) -> bool:
+        """Check if a switch is already registered to any user"""
+        return User.get(switch_id=switch_id) is not None

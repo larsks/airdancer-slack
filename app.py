@@ -505,6 +505,20 @@ class AirdancerApp:
         if len(args) == 1:
             # User registering themselves
             switch_id = self.clean_switch_id(args[0])
+
+            # Check if switch is already registered
+            if self.database.is_switch_registered(switch_id):
+                owner = self.database.get_switch_owner(switch_id)
+                if owner and owner["slack_user_id"] == user_id:
+                    respond(
+                        f"Switch `{switch_id}` is already registered to your account."
+                    )
+                else:
+                    respond(
+                        f"Switch `{switch_id}` is already registered to another user. Please contact an administrator if you believe this is an error."
+                    )
+                return
+
             if self.database.register_switch(user_id, switch_id):
                 respond(
                     f"Successfully registered switch `{switch_id}` to your account."
@@ -529,6 +543,22 @@ class AirdancerApp:
                     self.database.add_user(target_user_id, username)
             except Exception:
                 respond(f"Could not find user {target_user}")
+                return
+
+            # Check if switch is already registered
+            if self.database.is_switch_registered(switch_id):
+                owner = self.database.get_switch_owner(switch_id)
+                if owner and owner["slack_user_id"] == target_user_id:
+                    respond(
+                        f"Switch `{switch_id}` is already registered to <@{target_user_id}>."
+                    )
+                else:
+                    current_owner = (
+                        f"<@{owner['slack_user_id']}>" if owner else "unknown user"
+                    )
+                    respond(
+                        f"Switch `{switch_id}` is already registered to {current_owner}. Use `/dancer unregister` first if you want to reassign it."
+                    )
                 return
 
             if self.database.register_switch(target_user_id, switch_id):

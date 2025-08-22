@@ -108,10 +108,19 @@ def temp_db():
         def register_switch(self, slack_user_id: str, switch_id: str) -> bool:
             try:
                 user = self.User.get(slack_user_id=slack_user_id)
-                if user:
-                    user.switch_id = switch_id
-                    return True
-                return False
+                if not user:
+                    return False
+
+                # Check if switch is already registered to another user
+                existing_user = self.User.get(switch_id=switch_id)
+                if existing_user and existing_user.slack_user_id != slack_user_id:
+                    print(
+                        f"Switch {switch_id} is already registered to user {existing_user.slack_user_id}"
+                    )
+                    return False
+
+                user.switch_id = switch_id
+                return True
             except Exception as e:
                 print(f"Error registering switch: {e}")
                 return False
@@ -284,6 +293,11 @@ def temp_db():
                     "is_admin": user.is_admin,
                 }
             return None
+
+        @db_session
+        def is_switch_registered(self, switch_id: str) -> bool:
+            """Check if a switch is already registered to any user"""
+            return self.User.get(switch_id=switch_id) is not None
 
         @db_session
         def get_all_switches_with_owners(self) -> list[SwitchWithOwnerDict]:
@@ -610,3 +624,76 @@ class TestDatabaseOperations:
 
         # Operations on nonexistent switch owner
         assert temp_db.get_switch_owner("NONEXISTENT") is None
+
+    def test_prevent_duplicate_switch_registration(self, temp_db):
+        """Test that a switch cannot be registered to multiple users"""
+        # Add two users
+        temp_db.add_user("U1", "user1", False)
+        temp_db.add_user("U2", "user2", False)
+
+        # Register switch to first user
+        result = temp_db.register_switch("U1", "shared_switch")
+        assert result is True
+
+        # Verify first user has the switch
+        user1 = temp_db.get_user("U1")
+        assert user1["switch_id"] == "shared_switch"
+
+        # Try to register same switch to second user - should fail
+        result = temp_db.register_switch("U2", "shared_switch")
+        assert result is False
+
+        # Verify second user does not have the switch
+        user2 = temp_db.get_user("U2")
+        assert user2["switch_id"] == ""
+
+        # Verify switch is still registered to first user
+        owner = temp_db.get_switch_owner("shared_switch")
+        assert owner is not None
+        assert owner["slack_user_id"] == "U1"
+
+        # Test is_switch_registered method
+        assert temp_db.is_switch_registered("shared_switch") is True
+        assert temp_db.is_switch_registered("nonexistent_switch") is False
+
+    def test_re_register_same_switch_to_same_user(self, temp_db):
+        """Test that a user can re-register their own switch"""
+        # Add user and register switch
+        temp_db.add_user("U1", "user1", False)
+        result = temp_db.register_switch("U1", "user_switch")
+        assert result is True
+
+        # Re-register same switch to same user - should succeed
+        result = temp_db.register_switch("U1", "user_switch")
+        assert result is True
+
+        # Verify user still has the switch
+        user = temp_db.get_user("U1")
+        assert user["switch_id"] == "user_switch"
+
+    def test_register_different_switches_to_different_users(self, temp_db):
+        """Test that different switches can be registered to different users"""
+        # Add two users
+        temp_db.add_user("U1", "user1", False)
+        temp_db.add_user("U2", "user2", False)
+
+        # Register different switches
+        result1 = temp_db.register_switch("U1", "switch1")
+        result2 = temp_db.register_switch("U2", "switch2")
+
+        assert result1 is True
+        assert result2 is True
+
+        # Verify both registrations
+        user1 = temp_db.get_user("U1")
+        user2 = temp_db.get_user("U2")
+
+        assert user1["switch_id"] == "switch1"
+        assert user2["switch_id"] == "switch2"
+
+        # Verify ownership
+        owner1 = temp_db.get_switch_owner("switch1")
+        owner2 = temp_db.get_switch_owner("switch2")
+
+        assert owner1["slack_user_id"] == "U1"
+        assert owner2["slack_user_id"] == "U2"

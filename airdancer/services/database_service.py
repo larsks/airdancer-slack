@@ -1,8 +1,8 @@
 """Database service implementation"""
 
+import os
 import logging
 from typing import List
-from datetime import datetime
 
 from .interfaces import DatabaseServiceInterface
 from ..models.entities import User, Switch, SwitchWithOwner, Owner
@@ -15,6 +15,9 @@ class DatabaseService(DatabaseServiceInterface):
     """Service for database operations using the existing DatabaseManager"""
 
     def __init__(self, database_path: str = "airdancer.db"):
+        # Convert relative paths to absolute paths relative to current working directory
+        if not os.path.isabs(database_path):
+            database_path = os.path.abspath(database_path)
         self._db_manager = DatabaseManager(database_path)
 
     def add_user(
@@ -25,16 +28,7 @@ class DatabaseService(DatabaseServiceInterface):
 
     def get_user(self, slack_user_id: str) -> User | None:
         """Get user by Slack user ID"""
-        user_dict = self._db_manager.get_user(slack_user_id)
-        if user_dict:
-            return User(
-                slack_user_id=user_dict["slack_user_id"],
-                username=user_dict["username"],
-                is_admin=user_dict["is_admin"],
-                switch_id=user_dict["switch_id"],
-                created_at=datetime.fromisoformat(user_dict["created_at"]),
-            )
-        return None
+        return self._db_manager.get_user(slack_user_id)
 
     def is_admin(self, slack_user_id: str) -> bool:
         """Check if user is admin"""
@@ -58,14 +52,7 @@ class DatabaseService(DatabaseServiceInterface):
 
     def get_switch_owner(self, switch_id: str) -> Owner | None:
         """Get the owner of a switch"""
-        owner_dict = self._db_manager.get_switch_owner(switch_id)
-        if owner_dict:
-            return Owner(
-                slack_user_id=owner_dict["slack_user_id"],
-                username=owner_dict["username"],
-                is_admin=owner_dict["is_admin"],
-            )
-        return None
+        return self._db_manager.get_switch_owner(switch_id)
 
     def add_switch(self, switch_id: str, device_info: str = "") -> bool:
         """Add a switch to the database"""
@@ -81,58 +68,15 @@ class DatabaseService(DatabaseServiceInterface):
 
     def get_all_switches(self) -> List[Switch]:
         """Get all switches"""
-        switches_dict = self._db_manager.get_all_switches()
-        return [
-            Switch(
-                switch_id=switch["switch_id"],
-                status=switch["status"],
-                power_state=switch["power_state"],
-                last_seen=datetime.fromisoformat(switch["last_seen"]),
-                device_info=switch["device_info"],
-            )
-            for switch in switches_dict
-        ]
+        return self._db_manager.get_all_switches()
 
     def get_all_switches_with_owners(self) -> List[SwitchWithOwner]:
         """Get all switches with owner information"""
-        switches_dict = self._db_manager.get_all_switches_with_owners()
-        result = []
-
-        for switch in switches_dict:
-            owner = None
-            if switch["owner"]:
-                owner = Owner(
-                    slack_user_id=switch["owner"]["slack_user_id"],
-                    username=switch["owner"]["username"],
-                    is_admin=switch["owner"]["is_admin"],
-                )
-
-            result.append(
-                SwitchWithOwner(
-                    switch_id=switch["switch_id"],
-                    status=switch["status"],
-                    power_state=switch["power_state"],
-                    last_seen=datetime.fromisoformat(switch["last_seen"]),
-                    device_info=switch["device_info"],
-                    owner=owner,
-                )
-            )
-
-        return result
+        return self._db_manager.get_all_switches_with_owners()
 
     def get_all_users(self) -> List[User]:
         """Get all users"""
-        users_dict = self._db_manager.get_all_users()
-        return [
-            User(
-                slack_user_id=user["slack_user_id"],
-                username=user["username"],
-                is_admin=user["is_admin"],
-                switch_id=user["switch_id"],
-                created_at=datetime.fromisoformat(user["created_at"]),
-            )
-            for user in users_dict
-        ]
+        return self._db_manager.get_all_users()
 
     def create_group(self, group_name: str) -> bool:
         """Create a new group"""

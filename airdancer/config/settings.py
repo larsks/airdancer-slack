@@ -1,7 +1,7 @@
 """Configuration settings for Airdancer using pydantic_settings"""
 
 from urllib.parse import urlparse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -87,9 +87,7 @@ class AppConfig(BaseSettings):
     mqtt_username: str | None = None
     mqtt_password: str | None = None
 
-    class Config:
-        env_prefix: str = "DANCER_"
-        case_sensitive: bool = False
+    model_config = ConfigDict(env_prefix="DANCER_", case_sensitive=False)
 
     @property
     def slack(self) -> SlackConfig:

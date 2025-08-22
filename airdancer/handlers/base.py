@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Union, Dict
 
 
 @dataclass
@@ -11,7 +11,7 @@ class CommandContext:
 
     user_id: str
     args: List[str]
-    respond: Callable[[str], None]
+    respond: Callable[[Union[str, Dict[str, Any]]], None]
     client: Any
 
 

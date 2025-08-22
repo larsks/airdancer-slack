@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime
 from pony.orm import db_session, Database, Required, Optional, Set
 
-from database import UserDict, SwitchDict, OwnerDict, SwitchWithOwnerDict
+from airdancer.models.entities import User, Switch, SwitchWithOwner, Owner
 
 
 @pytest.fixture
@@ -76,21 +76,21 @@ def temp_db():
                 return False
 
         @db_session
-        def get_user(self, slack_user_id: str) -> UserDict | None:
+        def get_user(self, slack_user_id: str) -> User | None:
             user = self.User.get(slack_user_id=slack_user_id)
             if user:
-                return {
-                    "slack_user_id": user.slack_user_id,
-                    "username": user.username,
-                    "is_admin": user.is_admin,
-                    "switch_id": user.switch_id,
-                    "created_at": user.created_at.isoformat(),
-                }
+                return User(
+                    slack_user_id=user.slack_user_id,
+                    username=user.username,
+                    is_admin=user.is_admin,
+                    switch_id=user.switch_id,
+                    created_at=user.created_at,
+                )
             return None
 
         def is_admin(self, slack_user_id: str) -> bool:
             user = self.get_user(slack_user_id)
-            return bool(user and user["is_admin"])
+            return bool(user and user.is_admin)
 
         @db_session
         def set_admin(self, slack_user_id: str, is_admin: bool) -> bool:
@@ -181,30 +181,30 @@ def temp_db():
                 return False
 
         @db_session
-        def get_all_switches(self) -> list[SwitchDict]:
+        def get_all_switches(self) -> list[Switch]:
             switches = list(self.Switch.select())
             return [
-                {
-                    "switch_id": switch.switch_id,
-                    "status": switch.status,
-                    "power_state": switch.power_state,
-                    "last_seen": switch.last_seen.isoformat(),
-                    "device_info": switch.device_info,
-                }
+                Switch(
+                    switch_id=switch.switch_id,
+                    status=switch.status,
+                    power_state=switch.power_state,
+                    last_seen=switch.last_seen,
+                    device_info=switch.device_info,
+                )
                 for switch in switches
             ]
 
         @db_session
-        def get_all_users(self) -> list[UserDict]:
+        def get_all_users(self) -> list[User]:
             users = list(self.User.select())
             return [
-                {
-                    "slack_user_id": user.slack_user_id,
-                    "username": user.username,
-                    "is_admin": user.is_admin,
-                    "switch_id": user.switch_id,
-                    "created_at": user.created_at.isoformat(),
-                }
+                User(
+                    slack_user_id=user.slack_user_id,
+                    username=user.username,
+                    is_admin=user.is_admin,
+                    switch_id=user.switch_id,
+                    created_at=user.created_at,
+                )
                 for user in users
             ]
 
@@ -264,9 +264,9 @@ def temp_db():
         def get_group_members(self, group_name: str):
             if group_name.lower() == "all":
                 return [
-                    user["slack_user_id"]
+                    user.slack_user_id
                     for user in self.get_all_users()
-                    if user["switch_id"]
+                    if user.switch_id
                 ]
 
             with db_session:
@@ -283,15 +283,15 @@ def temp_db():
             return groups
 
         @db_session
-        def get_switch_owner(self, switch_id: str) -> OwnerDict | None:
+        def get_switch_owner(self, switch_id: str) -> Owner | None:
             """Get the user who owns the specified switch"""
             user = self.User.get(switch_id=switch_id)
             if user:
-                return {
-                    "slack_user_id": user.slack_user_id,
-                    "username": user.username,
-                    "is_admin": user.is_admin,
-                }
+                return Owner(
+                    slack_user_id=user.slack_user_id,
+                    username=user.username,
+                    is_admin=user.is_admin,
+                )
             return None
 
         @db_session
@@ -300,30 +300,31 @@ def temp_db():
             return self.User.get(switch_id=switch_id) is not None
 
         @db_session
-        def get_all_switches_with_owners(self) -> list[SwitchWithOwnerDict]:
+        def get_all_switches_with_owners(self) -> list[SwitchWithOwner]:
             """Get all switches with their owner information using a join (mock version)"""
             # For testing, we'll simulate the join using our existing entities
             switches = list(self.Switch.select())
             results = []
 
             for switch in switches:
-                switch_data: SwitchWithOwnerDict = {
-                    "switch_id": switch.switch_id,
-                    "status": switch.status,
-                    "power_state": switch.power_state,
-                    "last_seen": switch.last_seen.isoformat(),
-                    "device_info": switch.device_info,
-                    "owner": None,
-                }
-
+                owner = None
                 # Find owner
                 user = self.User.get(switch_id=switch.switch_id)
                 if user:
-                    switch_data["owner"] = {
-                        "slack_user_id": user.slack_user_id,
-                        "username": user.username,
-                        "is_admin": user.is_admin,
-                    }
+                    owner = Owner(
+                        slack_user_id=user.slack_user_id,
+                        username=user.username,
+                        is_admin=user.is_admin,
+                    )
+
+                switch_data = SwitchWithOwner(
+                    switch_id=switch.switch_id,
+                    status=switch.status,
+                    power_state=switch.power_state,
+                    last_seen=switch.last_seen,
+                    device_info=switch.device_info,
+                    owner=owner,
+                )
 
                 results.append(switch_data)
 
@@ -346,80 +347,80 @@ class TestDatabaseOperations:
     def test_add_and_get_user(self, temp_db):
         """Test adding and retrieving users"""
         # Add a user
-        result = temp_db.add_user("U123456", "testuser", False)
+        result = temp_db.add_user("U10000000230000045678", "testuser", False)
         assert result is True
 
         # Get the user
-        user = temp_db.get_user("U123456")
+        user = temp_db.get_user("U10000000230000045678")
         assert user is not None
-        assert user["slack_user_id"] == "U123456"
-        assert user["username"] == "testuser"
-        assert user["is_admin"] is False
-        assert user["switch_id"] == ""
+        assert user.slack_user_id == "U10000000230000045678"
+        assert user.username == "testuser"
+        assert user.is_admin is False
+        assert user.switch_id is None
 
     def test_add_admin_user(self, temp_db):
         """Test adding admin users"""
-        result = temp_db.add_user("U789", "admin", True)
+        result = temp_db.add_user("U78901234", "admin", True)
         assert result is True
 
-        user = temp_db.get_user("U789")
-        assert user["is_admin"] is True
-        assert temp_db.is_admin("U789") is True
+        user = temp_db.get_user("U78901234")
+        assert user.is_admin is True
+        assert temp_db.is_admin("U78901234") is True
 
     def test_update_existing_user(self, temp_db):
         """Test updating existing user information"""
         # Add user
-        temp_db.add_user("U123", "oldname", False)
+        temp_db.add_user("U100000002300000", "oldname", False)
 
         # Update user
-        result = temp_db.add_user("U123", "newname", True)
+        result = temp_db.add_user("U100000002300000", "newname", True)
         assert result is True
 
         # Verify update
-        user = temp_db.get_user("U123")
-        assert user["username"] == "newname"
-        assert user["is_admin"] is True
+        user = temp_db.get_user("U100000002300000")
+        assert user.username == "newname"
+        assert user.is_admin is True
 
     def test_set_admin_status(self, temp_db):
         """Test changing admin status"""
         # Add regular user
-        temp_db.add_user("U456", "user", False)
+        temp_db.add_user("U45600000", "user", False)
 
         # Make admin
-        result = temp_db.set_admin("U456", True)
+        result = temp_db.set_admin("U45600000", True)
         assert result is True
-        assert temp_db.is_admin("U456") is True
+        assert temp_db.is_admin("U45600000") is True
 
         # Remove admin
-        result = temp_db.set_admin("U456", False)
+        result = temp_db.set_admin("U45600000", False)
         assert result is True
-        assert temp_db.is_admin("U456") is False
+        assert temp_db.is_admin("U45600000") is False
 
     def test_register_switch(self, temp_db):
         """Test registering switches to users"""
         # Add user first
-        temp_db.add_user("U123", "user", False)
+        temp_db.add_user("U100000002300000", "user", False)
 
         # Register switch
-        result = temp_db.register_switch("U123", "switch001")
+        result = temp_db.register_switch("U100000002300000", "switch001")
         assert result is True
 
         # Verify registration
-        user = temp_db.get_user("U123")
-        assert user["switch_id"] == "switch001"
+        user = temp_db.get_user("U100000002300000")
+        assert user.switch_id == "switch001"
 
     def test_unregister_user(self, temp_db):
         """Test unregistering users"""
         # Add user
-        temp_db.add_user("U999", "temp", False)
-        assert temp_db.get_user("U999") is not None
+        temp_db.add_user("U99900000", "temp", False)
+        assert temp_db.get_user("U99900000") is not None
 
         # Unregister
-        result = temp_db.unregister_user("U999")
+        result = temp_db.unregister_user("U99900000")
         assert result is True
 
         # Verify deletion
-        assert temp_db.get_user("U999") is None
+        assert temp_db.get_user("U99900000") is None
 
     def test_switch_operations(self, temp_db):
         """Test switch add, update, and retrieval operations"""
@@ -438,10 +439,10 @@ class TestDatabaseOperations:
         # Get all switches
         switches = temp_db.get_all_switches()
         assert len(switches) == 1
-        assert switches[0]["switch_id"] == "sw001"
-        assert switches[0]["status"] == "online"
-        assert switches[0]["power_state"] == "ON"
-        assert switches[0]["device_info"] == '{"ip": "192.168.1.100"}'
+        assert switches[0].switch_id == "sw001"
+        assert switches[0].status == "online"
+        assert switches[0].power_state == "ON"
+        assert switches[0].device_info == '{"ip": "192.168.1.100"}'
 
     def test_update_existing_switch(self, temp_db):
         """Test updating existing switch information"""
@@ -454,9 +455,9 @@ class TestDatabaseOperations:
 
         # Verify update
         switches = temp_db.get_all_switches()
-        switch = next(s for s in switches if s["switch_id"] == "sw002")
-        assert switch["device_info"] == "new_info"
-        assert switch["status"] == "online"
+        switch = next(s for s in switches if s.switch_id == "sw002")
+        assert switch.device_info == "new_info"
+        assert switch.status == "online"
 
     def test_group_operations(self, temp_db):
         """Test group creation, deletion, and member management"""
@@ -469,29 +470,29 @@ class TestDatabaseOperations:
         assert result is False
 
         # Add users
-        temp_db.add_user("U1", "user1", False)
-        temp_db.add_user("U2", "user2", False)
+        temp_db.add_user("U10000000", "user1", False)
+        temp_db.add_user("U20000000", "user2", False)
 
         # Add users to group
-        result = temp_db.add_user_to_group("testgroup", "U1")
+        result = temp_db.add_user_to_group("testgroup", "U10000000")
         assert result is True
-        result = temp_db.add_user_to_group("testgroup", "U2")
+        result = temp_db.add_user_to_group("testgroup", "U20000000")
         assert result is True
 
         # Get group members
         members = temp_db.get_group_members("testgroup")
         assert len(members) == 2
-        assert "U1" in members
-        assert "U2" in members
+        assert "U10000000" in members
+        assert "U20000000" in members
 
         # Remove user from group
-        result = temp_db.remove_user_from_group("testgroup", "U1")
+        result = temp_db.remove_user_from_group("testgroup", "U10000000")
         assert result is True
 
         # Verify removal
         members = temp_db.get_group_members("testgroup")
         assert len(members) == 1
-        assert "U2" in members
+        assert "U20000000" in members
 
         # Delete group
         result = temp_db.delete_group("testgroup")
@@ -500,26 +501,26 @@ class TestDatabaseOperations:
     def test_special_all_group(self, temp_db):
         """Test the special 'all' group functionality"""
         # Add users with and without switches
-        temp_db.add_user("U1", "user1", False)
-        temp_db.add_user("U2", "user2", False)
-        temp_db.add_user("U3", "user3", False)
+        temp_db.add_user("U10000000", "user1", False)
+        temp_db.add_user("U20000000", "user2", False)
+        temp_db.add_user("U30000000", "user3", False)
 
         # Register switches for some users
-        temp_db.register_switch("U1", "sw1")
-        temp_db.register_switch("U3", "sw3")
+        temp_db.register_switch("U10000000", "sw1")
+        temp_db.register_switch("U30000000", "sw3")
 
         # Get 'all' group members
         members = temp_db.get_group_members("all")
         assert len(members) == 2
-        assert "U1" in members
-        assert "U3" in members
-        assert "U2" not in members  # No switch registered
+        assert "U10000000" in members
+        assert "U30000000" in members
+        assert "U20000000" not in members  # No switch registered
 
     def test_get_all_operations(self, temp_db):
         """Test get_all_* operations"""
         # Add test data
-        temp_db.add_user("U1", "user1", False)
-        temp_db.add_user("U2", "admin", True)
+        temp_db.add_user("U10000000", "user1", False)
+        temp_db.add_user("U20000000", "admin", True)
         temp_db.add_switch("sw1")
         temp_db.add_switch("sw2")
         temp_db.create_group("group1")
@@ -543,15 +544,15 @@ class TestDatabaseOperations:
     def test_switch_owner_functionality(self, temp_db):
         """Test switch owner lookup functionality"""
         # Add user and register switch
-        temp_db.add_user("U123", "alice", True)  # Admin user
-        temp_db.register_switch("U123", "switch001")
+        temp_db.add_user("U100000002300000", "alice", True)  # Admin user
+        temp_db.register_switch("U100000002300000", "switch001")
 
         # Test getting switch owner
         owner = temp_db.get_switch_owner("switch001")
         assert owner is not None
-        assert owner["slack_user_id"] == "U123"
-        assert owner["username"] == "alice"
-        assert owner["is_admin"] is True
+        assert owner.slack_user_id == "U100000002300000"
+        assert owner.username == "alice"
+        assert owner.is_admin is True
 
         # Test unregistered switch
         temp_db.add_switch("unregistered_switch")
@@ -565,8 +566,8 @@ class TestDatabaseOperations:
     def test_switches_with_owners_join(self, temp_db):
         """Test the optimized get_all_switches_with_owners method"""
         # Add users and switches
-        temp_db.add_user("U123", "alice", True)  # Admin user
-        temp_db.add_user("U456", "bob", False)  # Regular user
+        temp_db.add_user("U100000002300000", "alice", True)  # Admin user
+        temp_db.add_user("U45600000", "bob", False)  # Regular user
 
         # Add switches first, then register them to users
         temp_db.add_switch("switch001")
@@ -574,34 +575,32 @@ class TestDatabaseOperations:
         temp_db.add_switch("unregistered_switch")
 
         # Register switches to users
-        temp_db.register_switch("U123", "switch001")
-        temp_db.register_switch("U456", "switch002")
+        temp_db.register_switch("U100000002300000", "switch001")
+        temp_db.register_switch("U45600000", "switch002")
 
         # Get all switches with owners
         switches = temp_db.get_all_switches_with_owners()
         assert len(switches) == 3
 
         # Find specific switches
-        switch001 = next(s for s in switches if s["switch_id"] == "switch001")
-        switch002 = next(s for s in switches if s["switch_id"] == "switch002")
-        unregistered = next(
-            s for s in switches if s["switch_id"] == "unregistered_switch"
-        )
+        switch001 = next(s for s in switches if s.switch_id == "switch001")
+        switch002 = next(s for s in switches if s.switch_id == "switch002")
+        unregistered = next(s for s in switches if s.switch_id == "unregistered_switch")
 
         # Test switch001 (admin owner)
-        assert switch001["owner"] is not None
-        assert switch001["owner"]["slack_user_id"] == "U123"
-        assert switch001["owner"]["username"] == "alice"
-        assert switch001["owner"]["is_admin"] is True
+        assert switch001.owner is not None
+        assert switch001.owner.slack_user_id == "U100000002300000"
+        assert switch001.owner.username == "alice"
+        assert switch001.owner.is_admin is True
 
         # Test switch002 (regular owner)
-        assert switch002["owner"] is not None
-        assert switch002["owner"]["slack_user_id"] == "U456"
-        assert switch002["owner"]["username"] == "bob"
-        assert switch002["owner"]["is_admin"] is False
+        assert switch002.owner is not None
+        assert switch002.owner.slack_user_id == "U45600000"
+        assert switch002.owner.username == "bob"
+        assert switch002.owner.is_admin is False
 
         # Test unregistered switch
-        assert unregistered["owner"] is None
+        assert unregistered.owner is None
 
     def test_nonexistent_operations(self, temp_db):
         """Test operations on nonexistent entities"""
@@ -618,8 +617,8 @@ class TestDatabaseOperations:
 
         # Operations on nonexistent group
         assert temp_db.delete_group("NONEXISTENT") is False
-        assert temp_db.add_user_to_group("NONEXISTENT", "U1") is False
-        assert temp_db.remove_user_from_group("NONEXISTENT", "U1") is False
+        assert temp_db.add_user_to_group("NONEXISTENT", "U10000000") is False
+        assert temp_db.remove_user_from_group("NONEXISTENT", "U10000000") is False
         assert temp_db.get_group_members("NONEXISTENT") == []
 
         # Operations on nonexistent switch owner
@@ -628,29 +627,29 @@ class TestDatabaseOperations:
     def test_prevent_duplicate_switch_registration(self, temp_db):
         """Test that a switch cannot be registered to multiple users"""
         # Add two users
-        temp_db.add_user("U1", "user1", False)
-        temp_db.add_user("U2", "user2", False)
+        temp_db.add_user("U10000000", "user1", False)
+        temp_db.add_user("U20000000", "user2", False)
 
         # Register switch to first user
-        result = temp_db.register_switch("U1", "shared_switch")
+        result = temp_db.register_switch("U10000000", "shared_switch")
         assert result is True
 
         # Verify first user has the switch
-        user1 = temp_db.get_user("U1")
-        assert user1["switch_id"] == "shared_switch"
+        user1 = temp_db.get_user("U10000000")
+        assert user1.switch_id == "shared_switch"
 
         # Try to register same switch to second user - should fail
-        result = temp_db.register_switch("U2", "shared_switch")
+        result = temp_db.register_switch("U20000000", "shared_switch")
         assert result is False
 
         # Verify second user does not have the switch
-        user2 = temp_db.get_user("U2")
-        assert user2["switch_id"] == ""
+        user2 = temp_db.get_user("U20000000")
+        assert user2.switch_id is None
 
         # Verify switch is still registered to first user
         owner = temp_db.get_switch_owner("shared_switch")
         assert owner is not None
-        assert owner["slack_user_id"] == "U1"
+        assert owner.slack_user_id == "U10000000"
 
         # Test is_switch_registered method
         assert temp_db.is_switch_registered("shared_switch") is True
@@ -659,41 +658,41 @@ class TestDatabaseOperations:
     def test_re_register_same_switch_to_same_user(self, temp_db):
         """Test that a user can re-register their own switch"""
         # Add user and register switch
-        temp_db.add_user("U1", "user1", False)
-        result = temp_db.register_switch("U1", "user_switch")
+        temp_db.add_user("U10000000", "user1", False)
+        result = temp_db.register_switch("U10000000", "user_switch")
         assert result is True
 
         # Re-register same switch to same user - should succeed
-        result = temp_db.register_switch("U1", "user_switch")
+        result = temp_db.register_switch("U10000000", "user_switch")
         assert result is True
 
         # Verify user still has the switch
-        user = temp_db.get_user("U1")
-        assert user["switch_id"] == "user_switch"
+        user = temp_db.get_user("U10000000")
+        assert user.switch_id == "user_switch"
 
     def test_register_different_switches_to_different_users(self, temp_db):
         """Test that different switches can be registered to different users"""
         # Add two users
-        temp_db.add_user("U1", "user1", False)
-        temp_db.add_user("U2", "user2", False)
+        temp_db.add_user("U10000000", "user1", False)
+        temp_db.add_user("U20000000", "user2", False)
 
         # Register different switches
-        result1 = temp_db.register_switch("U1", "switch1")
-        result2 = temp_db.register_switch("U2", "switch2")
+        result1 = temp_db.register_switch("U10000000", "switch1")
+        result2 = temp_db.register_switch("U20000000", "switch2")
 
         assert result1 is True
         assert result2 is True
 
         # Verify both registrations
-        user1 = temp_db.get_user("U1")
-        user2 = temp_db.get_user("U2")
+        user1 = temp_db.get_user("U10000000")
+        user2 = temp_db.get_user("U20000000")
 
-        assert user1["switch_id"] == "switch1"
-        assert user2["switch_id"] == "switch2"
+        assert user1.switch_id == "switch1"
+        assert user2.switch_id == "switch2"
 
         # Verify ownership
         owner1 = temp_db.get_switch_owner("switch1")
         owner2 = temp_db.get_switch_owner("switch2")
 
-        assert owner1["slack_user_id"] == "U1"
-        assert owner2["slack_user_id"] == "U2"
+        assert owner1.slack_user_id == "U10000000"
+        assert owner2.slack_user_id == "U20000000"

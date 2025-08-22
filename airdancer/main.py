@@ -2,6 +2,7 @@
 
 import os
 import logging
+import re
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -40,8 +41,9 @@ class AirdancerApp:
         )
         logger.info("⚙️  Command handlers configured")
 
-        # Set up commands
+        # Set up commands and events
         self._setup_commands()
+        self._setup_events()
 
         # Set up initial admin user if specified
         if config.admin_user:
@@ -94,6 +96,101 @@ class AirdancerApp:
                 respond(
                     f"Unknown command: {cmd}. Use `/dancer help` for available commands."
                 )
+
+    def _setup_events(self):
+        """Set up Slack event handlers"""
+
+        @self.slack_app.event("message")
+        def handle_message_events(body, say, client):
+            # Only handle direct messages (not channel messages)
+            event = body["event"]
+
+            # Skip bot messages and messages that aren't direct messages
+            if event.get("bot_id") or event.get("channel_type") != "im":
+                return
+
+            user_id = event["user"]
+            text = event.get("text", "").strip()
+
+            if not text:
+                say("Please send a command. Type `help` for available commands.")
+                return
+
+            args = text.split()
+            cmd = args[0].lower()
+
+            # Create response function that uses say
+            def respond(message):
+                say(message)
+
+            context = CommandContext(
+                user_id=user_id, args=args[1:], respond=respond, client=client
+            )
+
+            # Ensure user exists in database
+            try:
+                user_info = client.users_info(user=user_id)
+                username = user_info["user"]["name"]
+                if not self.database_service.get_user(user_id):
+                    self.database_service.add_user(user_id, username)
+
+                # Check if this user should be made admin
+                self._ensure_admin_user(user_id, username)
+            except Exception as e:
+                logger.error(f"Error getting user info: {e}")
+
+            # Route commands (same logic as slash command)
+            if cmd == "help":
+                self._handle_help(context)
+            elif cmd in ["register", "bother", "users", "groups"]:
+                self.user_handler.handle_command(cmd, context)
+            elif cmd in ["unregister", "switch", "user", "group"]:
+                self.admin_handler.handle_command(cmd, context)
+            else:
+                respond(f"Unknown command: {cmd}. Type `help` for available commands.")
+
+        # Handle toggle button actions
+        @self.slack_app.action(re.compile(r"toggle_switch_.*"))
+        def handle_toggle_switch(ack, body, client):
+            ack()
+
+            user_id = body["user"]["id"]
+            action = body["actions"][0]
+            switch_id = action["value"]
+
+            logger.info(f"Toggle button pressed by {user_id} for switch {switch_id}")
+
+            # Check if user is admin (only admins can toggle switches)
+            if not self.database_service.is_admin(user_id):
+                try:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text="❌ Only administrators can toggle switches.",
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending ephemeral message: {e}")
+                return
+
+            # Send toggle command
+            success = self.mqtt_service.switch_toggle(switch_id)
+
+            # Send response
+            try:
+                if success:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text=f"✅ Toggle command sent to switch `{switch_id}`",
+                    )
+                else:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text=f"❌ Failed to send toggle command to switch `{switch_id}`",
+                    )
+            except Exception as e:
+                logger.error(f"Error sending toggle response: {e}")
 
     def _ensure_admin_user(self, user_id: str, username: str) -> None:
         """Check if this user should be made admin based on config"""

@@ -96,6 +96,7 @@ class CommandRouter:
 • `user list` - List all users (admin view)
 • `user show <user>` - Show user details
 • `user set <user> [--admin|--no-admin] [--bother|--no-bother]` - Configure user settings
+• `user register <user> <switch_id>` - Register a switch to a specific user
 • `group list` - List all groups with member counts
 • `group create <name>` - Create a new group
 • `group destroy <name>` - Delete a group

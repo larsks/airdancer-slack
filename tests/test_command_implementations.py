@@ -63,8 +63,7 @@ class TestUserCommands:
         self, mock_database_service, mock_context
     ):
         """Test registering switch already registered to same user"""
-        from airdancer.exceptions import SwitchAlreadyRegisteredError
-        
+
         mock_context.args = ["switch001"]
         # Mock the enhanced database service to throw SwitchAlreadyRegisteredError for same user
         # Since it's the same user, the enhanced service should actually succeed, so let's test that
@@ -83,11 +82,11 @@ class TestUserCommands:
     ):
         """Test registering switch already registered to different user"""
         from airdancer.exceptions import SwitchAlreadyRegisteredError
-        
+
         mock_context.args = ["switch001"]
         # Mock the enhanced database service to throw SwitchAlreadyRegisteredError for different user
-        mock_database_service.register_switch.side_effect = SwitchAlreadyRegisteredError(
-            "switch001", "U87654321"
+        mock_database_service.register_switch.side_effect = (
+            SwitchAlreadyRegisteredError("switch001", "U87654321")
         )
 
         command = RegisterCommand(mock_database_service)
@@ -460,6 +459,30 @@ class TestAdminCommands:
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
         assert "granted admin privileges" in response
+
+    def test_user_register_command(self, mock_database_service, mock_context):
+        """Test user register command (admin registers switch for another user)"""
+        mock_context.args = ["register", "<@U87654321>", "switch001"]
+        mock_user = User(
+            slack_user_id="U87654321",
+            username="testuser",
+            switch_id=None,
+            is_admin=False,
+            created_at=datetime.now(),
+        )
+        mock_database_service.get_all_users.return_value = [mock_user]
+        mock_database_service.register_switch.return_value = True
+        mock_context.client.users_info.return_value = {"ok": True}
+
+        command = UserCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_database_service.register_switch.assert_called_once_with(
+            "U87654321", "switch001"
+        )
+        mock_context.respond.assert_called_once()
+        response = mock_context.respond.call_args[0][0]
+        assert "Successfully registered switch `switch001` to <@U87654321>" in response
 
     def test_group_list_command(self, mock_database_service, mock_context):
         """Test group list command"""

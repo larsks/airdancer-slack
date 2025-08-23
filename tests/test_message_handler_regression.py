@@ -80,7 +80,9 @@ class TestMessageHandlerRegression:
             mock_slack_app.event.assert_called_with("message")
 
             # Ensure both were called (not just one)
-            assert mock_slack_app.command.call_count == 2, "Both slash command handlers not registered"
+            assert mock_slack_app.command.call_count == 2, (
+                "Both slash command handlers not registered"
+            )
             assert mock_slack_app.event.called, "Message event handler not registered"
 
     def test_app_calls_both_setup_methods(self, mock_config):

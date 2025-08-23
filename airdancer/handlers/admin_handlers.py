@@ -305,7 +305,7 @@ class UserCommand(BaseCommand):
     def execute(self, context: CommandContext) -> None:
         """Execute user command"""
         if not context.args:
-            context.respond("Usage: `user [list|show|set] ...`")
+            context.respond("Usage: `user [list|show|set|register] ...`")
             return
 
         cmd = context.args[0].lower()
@@ -316,9 +316,11 @@ class UserCommand(BaseCommand):
             self._show_user(context.args[1], context)
         elif cmd == "set" and len(context.args) >= 2:
             self._set_user(context.args[1:], context)
+        elif cmd == "register" and len(context.args) >= 3:
+            self._register_user(context.args[1], context.args[2], context)
         else:
             context.respond(
-                "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]]`"
+                "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]|register <user> <switch>]`"
             )
 
     def _list_users(self, context: CommandContext) -> None:
@@ -420,6 +422,34 @@ class UserCommand(BaseCommand):
             context.respond(
                 "No changes specified. Use --admin/--no-admin or --bother/--no-bother."
             )
+
+    def _register_user(
+        self, user_str: str, switch_id: str, context: CommandContext
+    ) -> None:
+        """Register a switch to a specific user (admin only)"""
+        from ..utils.formatters import clean_switch_id
+
+        target_user_id = self._resolve_user_identifier(user_str, context)
+        if not target_user_id:
+            context.respond(f"Could not find user {user_str}")
+            return
+
+        switch_id = clean_switch_id(switch_id)
+
+        try:
+            if self.database_service.register_switch(target_user_id, switch_id):
+                context.respond(
+                    f"Successfully registered switch `{switch_id}` to <@{target_user_id}>."
+                )
+            else:
+                context.respond(
+                    "Failed to register switch. Make sure the user has an account."
+                )
+        except Exception as e:
+            # Use the ErrorHandler for exceptions from the enhanced database service
+            from ..error_handler import ErrorHandler
+
+            ErrorHandler.handle_command_error(e, context)
 
     def _resolve_user_identifier(
         self, user_str: str, context: CommandContext

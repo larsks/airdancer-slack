@@ -6,7 +6,6 @@ from datetime import datetime
 
 from airdancer.handlers.user_handlers import UserSetCommand
 from airdancer.handlers.admin_handlers import UserCommand
-from airdancer.handlers.base import CommandContext
 from airdancer.models.entities import User
 
 

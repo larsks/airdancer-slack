@@ -109,15 +109,15 @@ class TestDatabaseService:
         """Test registering a switch"""
         from airdancer.models.entities import User
         from datetime import datetime
-        
+
         # Mock the methods called by enhanced register_switch
         mock_db_manager.is_switch_registered.return_value = False
         mock_db_manager.get_user.return_value = User(
-            slack_user_id="U12345678", 
-            username="testuser", 
+            slack_user_id="U12345678",
+            username="testuser",
             is_admin=False,
             switch_id=None,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
         mock_db_manager.register_switch.return_value = True
 

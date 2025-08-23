@@ -428,6 +428,10 @@ class TestAdminCommands:
         )
         mock_database_service.get_user.return_value = mock_user
         mock_database_service.get_all_users.return_value = [mock_user]
+        mock_context.client.users_info.return_value = {
+            "ok": True,
+            "user": {"name": "testuser"},
+        }
 
         command = UserCommand(mock_database_service)
         command.execute(mock_context)
@@ -477,6 +481,31 @@ class TestAdminCommands:
         command = UserCommand(mock_database_service)
         command.execute(mock_context)
 
+        mock_database_service.register_switch.assert_called_once_with(
+            "U87654321", "switch001"
+        )
+        mock_context.respond.assert_called_once()
+        response = mock_context.respond.call_args[0][0]
+        assert "Successfully registered switch `switch001` to <@U87654321>" in response
+
+    def test_user_register_command_new_user(self, mock_database_service, mock_context):
+        """Test user register command with a user who doesn't exist in database yet"""
+        mock_context.args = ["register", "<@U87654321>", "switch001"]
+        # Simulate user not in database initially
+        mock_database_service.get_all_users.return_value = []
+        mock_database_service.get_user.return_value = None
+        mock_database_service.add_user.return_value = True
+        mock_database_service.register_switch.return_value = True
+        mock_context.client.users_info.return_value = {
+            "ok": True,
+            "user": {"name": "testuser"},
+        }
+
+        command = UserCommand(mock_database_service)
+        command.execute(mock_context)
+
+        # Should add user to database first, then register switch
+        mock_database_service.add_user.assert_called_once_with("U87654321", "testuser")
         mock_database_service.register_switch.assert_called_once_with(
             "U87654321", "switch001"
         )
@@ -553,6 +582,10 @@ class TestAdminCommands:
                 slack_user_id="U87654321", username="user2", created_at=datetime.now()
             ),
         ]
+        mock_context.client.users_info.return_value = {
+            "ok": True,
+            "user": {"name": "testuser"},
+        }
 
         command = GroupCommand(mock_database_service)
         command.execute(mock_context)
@@ -569,6 +602,10 @@ class TestAdminCommands:
         mock_database_service.get_all_users.return_value = [
             User(slack_user_id="U12345678", username="user1", created_at=datetime.now())
         ]
+        mock_context.client.users_info.return_value = {
+            "ok": True,
+            "user": {"name": "testuser"},
+        }
 
         command = GroupCommand(mock_database_service)
         command.execute(mock_context)

@@ -602,8 +602,13 @@ def _resolve_user_identifier(
     if user_str.startswith("<@") and user_str.endswith(">"):
         user_id = user_str[2:-1]
         try:
-            context.client.users_info(user=user_id)
-            return user_id
+            response = context.client.users_info(user=user_id)
+            if response["ok"]:
+                # Add to database if they don't exist
+                if not database_service.get_user(user_id):
+                    username = response["user"].get("name", user_id)
+                    database_service.add_user(user_id, username)
+                return user_id
         except Exception:
             return None
 

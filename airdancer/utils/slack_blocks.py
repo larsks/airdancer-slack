@@ -65,8 +65,11 @@ def create_section_block(
     """
     section = {
         "type": "section",
-        "text": {"type": "mrkdwn", "text": text},
     }
+
+    # Only add text if it's not empty
+    if text and text.strip():
+        section["text"] = {"type": "mrkdwn", "text": text}
 
     if fields:
         section["fields"] = fields

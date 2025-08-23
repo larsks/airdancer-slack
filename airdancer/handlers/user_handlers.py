@@ -131,7 +131,7 @@ class BotherCommand(BaseCommand):
 
         bothered_count = 0
         for member_id in members:
-            if self._bother_user_by_id(member_id, duration):
+            if self._bother_user_by_id(member_id, duration, context):
                 bothered_count += 1
 
         context.respond(
@@ -146,14 +146,16 @@ class BotherCommand(BaseCommand):
             context.respond(f"Could not find user: {target}")
             return
 
-        if self._bother_user_by_id(user_id, duration):
+        if self._bother_user_by_id(user_id, duration, context):
             context.respond(f"Successfully bothered user for {duration} seconds.")
         else:
             context.respond(
                 "Failed to bother user. They may not have a registered switch."
             )
 
-    def _bother_user_by_id(self, user_id: str, duration: int) -> bool:
+    def _bother_user_by_id(
+        self, user_id: str, duration: int, context: CommandContext
+    ) -> bool:
         """Bother user by their ID"""
         user = self.database_service.get_user(user_id)
         if not user or not user.switch_id or not user.switch_id.strip():
@@ -163,7 +165,46 @@ class BotherCommand(BaseCommand):
         if not user.botherable:
             return False
 
-        return self.mqtt_service.bother_switch(user.switch_id, duration)
+        # Send the bother command to the switch
+        success = self.mqtt_service.bother_switch(user.switch_id, duration)
+
+        if success:
+            # Send a message to the target user informing them they've been bothered
+            self._send_bother_notification(user_id, context)
+
+        return success
+
+    def _send_bother_notification(
+        self, target_user_id: str, context: CommandContext
+    ) -> None:
+        """Send a notification to the target user that they've been bothered"""
+        try:
+            # Get the username of the person who initiated the bother command
+            botherer_info = context.client.users_info(user=context.user_id)
+            botherer_username = botherer_info["user"]["name"]
+
+            # Open a direct message conversation with the target user
+            dm_response = context.client.conversations_open(users=target_user_id)
+            if dm_response["ok"]:
+                channel_id = dm_response["channel"]["id"]
+
+                # Send the bother notification message
+                context.client.chat_postMessage(
+                    channel=channel_id,
+                    text=f"You have been bothered by @{botherer_username}",
+                )
+                logger.info(
+                    f"Sent bother notification to user {target_user_id} from {botherer_username}"
+                )
+            else:
+                logger.error(
+                    f"Failed to open DM conversation with user {target_user_id}: {dm_response.get('error', 'Unknown error')}"
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to send bother notification to user {target_user_id}: {e}"
+            )
 
     def _resolve_user_identifier(
         self, user_str: str, context: CommandContext

@@ -1,54 +1,70 @@
-This app allows slack users to send physical notifications to other users by activating remote switches running the Tasmota firmware. These switches can be controlled using an MQTT API.
+# Airdancer Slack Bot
 
-## MQTT API
+A Slack bot that enables users to send physical notifications by controlling remote Tasmota switches via MQTT. Users can "bother" others by activating their registered switches.
 
-Each switch can be addressed by sending messages to topic `cmnd/<switch>/<command>`, where `<switch>` is a unique identifier for the switch.
+## Setup
 
-We will make use of the following commands:
+1. Install dependencies: `uv sync`
+2. Configure environment variables for Slack tokens and MQTT connection
+3. Run: `uv run app.py`
 
-- `Power` -- turn the switch on and off. The message should be `ON`, `OFF`, or `TOGGLE`. If the message is empty, the response will contain the current power state.
-- `TimedPower1` -- turn the switch on for a specific duration. The message is the duration in milliseconds.
-
-Each command sent to a remote switch will result in a message from the switch to the topic `stat/<switch>/RESULT`, containing a JSON document showing the change.
-
-Changes in power state will also generate a message to `stat/<switch>/POWER`, where the message will be `ON` or `OFF`.
-
-### Discovery
-
-We can automatically discover switches by listening to the `tasmota/discovery/#` topic. Messages on this topic are a JSON document; we are interested in the `t` key which contains the switch id. An example discovery message:
+One mechanism for managing environment variables is to put them into a `.env` file, and then reference that in the `uv run` command:
 
 ```
-{"ip":"10.42.0.214","dn":"Tasmota","fn":["Tasmota",null,null,null,null,null,null,null],"hn":"tasmota-28D42B-5163","mac":"483FDA28D42B","md":"Sonoff Basic","ty":0,"if":0,"cam":0,"ofln":"Offline","onln":"Online","state":["OFF","ON","TOGGLE","HOLD"],"sw":"15.0.1.3","t":"tasmota_28D42B","ft":"%prefix%/%topic%/","tp":["cmnd","stat","tele"],"rl":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"swc":[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],"swn":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"btn":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"so":{"4":0,"11":0,"13":0,"17":0,"20":0,"30":0,"68":0,"73":0,"82":0,"114":0,"117":0},"lk":0,"lt_st":0,"bat":0,"dslp":0,"sho":[],"sht":[],"ver":1}
+uv run --env-file .env app.py
 ```
-
-If we saw the above message, we would discover a switch with the identifier `tasmota_28D42B`.
-
-We also want to monitor the topic `tele/<switch>/LWT`; the message `Offline` means that a switch is no longer available, while `Online` means that a switch has come online.
 
 ## Commands
 
-## User commands
+From any channel, you can run these commands by prefixing them with `/dancer`:
 
-These commands can be executed by any authorized user.
+```
+/dancer users
+```
 
-- `/dancer register <switch>` -- register Tasmota switch `<switch>` to current user
-- `/dancer bother [--duration <n>] (<user>|<group>)` -- activate switch for user or group (for `<n>` seconds, default 15)
-- `/dancer users` -- list registered users
-- `/dancer groups` -- list registered users
+You can also start a private message with the Airdancer app; in this case, you don't need the `/dancer` prefix to run the commands:
 
-### Admin commands
+```
+users
+```
 
-These commands require administrative privileges.
+### User Commands
 
-- `/dancer register <switch> <user>` -- register Tasmota switch `<switch>` to `<user>`
-- `/dancer unregister <user>` -- remove switch registration for `<user>`
-- `/dancer switch list` -- list discovered switches
-- `/dancer user list` -- list known users
-- `/dancer user show <user>` -- show details for `<user>`
-- `/dancer user set <user> [+admin|-admin]` -- grant or revoke admin privileges for `<user>`
-- `/dancer group list` -- list groups
-- `/dancer group show <name>` -- show members of group `<name>`
-- `/dancer group create <name>` -- create group named `<name>`
-- `/dancer group destroy <name>` -- destroy group named `<name>`
-- `/dancer group add <name> <user> [<user> [...]]` -- add users to group `<name>`
-- `/dancer group remove <name> <user> [<user> [...]]` -- remove users from group `<name>`
+- `register <switch_id>` - Register a Tasmota switch to your account
+- `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch (default: 15 seconds)
+- `set --bother|--no-bother` - Enable/disable bother notifications for your account
+- `users` - List all registered users
+- `groups` - List all available groups
+- `help` - Show command help
+
+### Admin Commands
+
+**User Management:**
+- `user list` - List all users
+- `user show <user>` - Show user details
+- `user set <user> [--admin|--no-admin] [--bother|--no-bother]` - Configure user settings
+- `user register <user> <switch_id>` - Register a switch to a specific user
+- `unregister <user>` - Remove a user's switch registration
+
+**Switch Management:**
+- `switch list` - List all discovered switches with status
+- `switch show <switch_id>` - Show detailed switch information
+- `switch on|off|toggle <switch_id>` - Control switch power state
+
+**Group Management:**
+- `group list` - List all groups with member counts
+- `group show <name>` - Show group members
+- `group create <name>` - Create a new group
+- `group destroy <name>` - Delete a group
+- `group add <name> <user1> [user2...]` - Add users to a group
+- `group remove <name> <user1> [user2...]` - Remove users from a group
+
+## Examples
+
+```
+/dancer register tasmota_12345
+/dancer bother @username
+/dancer bother --duration 30 mygroup
+/dancer switch toggle tasmota_12345
+/dancer group add engineering @alice @bob
+```

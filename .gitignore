@@ -1,9 +1,5 @@
 # Python
 .venv/
-env*/
 
-# macOS
-.DS_Store
-
-# Editors
-.vscode/
+/airdancer.db
+/.env

@@ -55,6 +55,11 @@ class DatabaseGroupMember(db.Entity):
 
 class DatabaseManager:
     def __init__(self, db_path: str = "airdancer.db"):
+        self.db_path = db_path
+
+        # Run pre-mapping migrations for existing databases
+        self._run_pre_mapping_migrations()
+
         db.bind("sqlite", db_path, create_db=True)
         db.generate_mapping(create_tables=True)
 
@@ -367,3 +372,40 @@ class DatabaseManager:
     def is_switch_registered(self, switch_id: str) -> bool:
         """Check if a switch is already registered to any user"""
         return DatabaseUser.get(switch_id=switch_id) is not None
+
+    def _run_pre_mapping_migrations(self):
+        """Run database migrations before schema mapping"""
+        import sqlite3
+        import os
+
+        try:
+            # Only run migrations if database file exists
+            if not os.path.exists(self.db_path):
+                return
+
+            # Connect directly to SQLite to run migrations
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Check if user table exists
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='user'"
+            )
+            if cursor.fetchone():
+                # Table exists, check if botherable column exists
+                cursor.execute("PRAGMA table_info(user)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                if "botherable" not in columns:
+                    logger.info("Adding botherable column to user table")
+                    cursor.execute(
+                        "ALTER TABLE user ADD COLUMN botherable BOOLEAN DEFAULT 1"
+                    )
+                    conn.commit()
+                    logger.info("Successfully added botherable column")
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Error running pre-mapping migrations: {e}")
+            # If migrations fail, we'll handle it gracefully in the code

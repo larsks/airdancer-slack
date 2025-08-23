@@ -86,11 +86,19 @@ class DatabaseService(DatabaseServiceInterface):
 
     def set_admin(self, slack_user_id: str, is_admin: bool) -> bool:
         """Set admin status for user"""
-        return self._db_manager.set_admin(slack_user_id, is_admin)
+        result = self._db_manager.set_admin(slack_user_id, is_admin)
+        if result:
+            # Clear cache entry since user data changed
+            self._user_cache.pop(slack_user_id, None)
+        return result
 
     def set_botherable(self, slack_user_id: str, botherable: bool) -> bool:
         """Set botherable status for user"""
-        return self._db_manager.set_botherable(slack_user_id, botherable)
+        result = self._db_manager.set_botherable(slack_user_id, botherable)
+        if result:
+            # Clear cache entry since user data changed
+            self._user_cache.pop(slack_user_id, None)
+        return result
 
     def register_switch(self, slack_user_id: str, switch_id: str) -> bool:
         """Register a switch to a user with comprehensive validation"""

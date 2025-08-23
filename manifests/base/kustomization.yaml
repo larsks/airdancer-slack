@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+- includeSelectors: true
+  pairs:
+    app: airdancer-slack
+
+resources:
+- deployment.yaml
+- pvc.yaml
+
+images:
+  - name: airdancer-slack
+    newName: ghcr.io/larsks/airdancer-slack
+    newTag: latest

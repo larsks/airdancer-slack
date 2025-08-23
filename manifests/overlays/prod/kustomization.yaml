@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+
+nameSuffix: -prod
+
+labels:
+- includeSelectors: true
+  pairs:
+    environment: prod
+
+patches:
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: airdancer-slack
+      spec:
+        template:
+          spec:
+            containers:
+            - name: airdancer-slack
+              envFrom:
+              - secretRef:
+                  name: airdancer-slack-config-prod

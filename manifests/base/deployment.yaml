@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airdancer-slack
+spec:
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      containers:
+      - name: airdancer-slack
+        image: airdancer-slack
+        imagePullPolicy: Always
+        env:
+        - name: HOME
+          value: /data
+        - name: DANCER_DATABASE_PATH
+          value: /data/airdancer.db
+        volumeMounts:
+        - name: airdancer-slack-data
+          mountPath: /data
+      volumes:
+        - name: airdancer-slack-data
+          persistentVolumeClaim:
+            claimName: airdancer-slack-data

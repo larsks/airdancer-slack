@@ -10,7 +10,11 @@ class DatabaseServiceInterface(ABC):
 
     @abstractmethod
     def add_user(
-        self, slack_user_id: str, username: str, is_admin: bool = False
+        self,
+        slack_user_id: str,
+        username: str,
+        is_admin: bool = False,
+        botherable: bool = True,
     ) -> bool:
         """Add a new user to the database"""
         pass
@@ -28,6 +32,11 @@ class DatabaseServiceInterface(ABC):
     @abstractmethod
     def set_admin(self, slack_user_id: str, is_admin: bool) -> bool:
         """Set admin status for user"""
+        pass
+
+    @abstractmethod
+    def set_botherable(self, slack_user_id: str, botherable: bool) -> bool:
+        """Set botherable status for user"""
         pass
 
     @abstractmethod

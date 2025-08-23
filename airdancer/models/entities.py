@@ -11,6 +11,7 @@ class User(BaseModel):
     username: str
     is_admin: bool = False
     switch_id: str | None = None
+    botherable: bool = True  # Allow others to bother this user by default
     created_at: datetime
 
     @field_validator("slack_user_id")

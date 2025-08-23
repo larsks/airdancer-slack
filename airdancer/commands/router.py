@@ -32,6 +32,7 @@ class CommandRouter:
             "bother": lambda ctx: self.user_handler.handle_command("bother", ctx),
             "users": lambda ctx: self.user_handler.handle_command("users", ctx),
             "groups": lambda ctx: self.user_handler.handle_command("groups", ctx),
+            "set": lambda ctx: self.user_handler.handle_command("set", ctx),
             # Admin commands
             "unregister": lambda ctx: self.admin_handler.handle_command(
                 "unregister", ctx
@@ -81,6 +82,7 @@ class CommandRouter:
 *User Commands:*
 • `register <switch_id>` - Register a switch to your account
 • `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch
+• `set --bother|--no-bother` - Enable/disable bother notifications
 • `users` - List all registered users
 • `groups` - List all available groups
 
@@ -93,7 +95,7 @@ class CommandRouter:
 • `switch toggle <switch_id>` - Toggle a switch
 • `user list` - List all users (admin view)
 • `user show <user>` - Show user details
-• `user set <user> +admin/-admin` - Grant/revoke admin privileges
+• `user set <user> [--admin|--no-admin] [--bother|--no-bother]` - Configure user settings
 • `group list` - List all groups with member counts
 • `group create <name>` - Create a new group
 • `group destroy <name>` - Delete a group

@@ -4,7 +4,7 @@ import logging
 from typing import Dict
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
-from ..utils.parsers import create_bother_parser
+from ..utils.parsers import create_bother_parser, create_user_set_parser
 from ..utils.formatters import clean_switch_id
 # Error handling will be done on a case-by-case basis
 
@@ -26,6 +26,7 @@ class UserCommandHandler:
             "bother": BotherCommand(database_service, mqtt_service),
             "users": ListUsersCommand(database_service),
             "groups": ListGroupsCommand(database_service),
+            "set": UserSetCommand(database_service),
         }
 
     def handle_command(self, command: str, context: CommandContext) -> None:
@@ -64,10 +65,13 @@ class RegisterCommand(BaseCommand):
                     f"Successfully registered switch `{switch_id}` to your account."
                 )
             else:
-                context.respond("Failed to register switch. Make sure you have an account.")
+                context.respond(
+                    "Failed to register switch. Make sure you have an account."
+                )
         except Exception as e:
             # Use the ErrorHandler for exceptions from the enhanced database service
             from ..error_handler import ErrorHandler
+
             ErrorHandler.handle_command_error(e, context)
 
 
@@ -91,19 +95,13 @@ class BotherCommand(BaseCommand):
         """Execute bother command"""
         try:
             parsed_args = self.parser.parse_args(context.args)
-            duration = parsed_args.duration
-            target = parsed_args.target
         except Exception as e:
             error_msg = str(e)
-            if "unrecognized arguments:" in error_msg:
-                context.respond(
-                    "Invalid arguments. Usage: `bother [--duration <n>] (<user>|<group>)`"
-                )
-            elif "the following arguments are required: target" in error_msg:
-                context.respond("Usage: `bother [--duration <n>] (<user>|<group>)`")
-            else:
-                context.respond(f"Error parsing arguments: {error_msg}")
+            context.respond(f"Error parsing arguments: {error_msg}")
             return
+
+        duration = parsed_args.duration
+        target = parsed_args.target
 
         # Validate duration
         if duration <= 0:
@@ -159,6 +157,10 @@ class BotherCommand(BaseCommand):
         """Bother user by their ID"""
         user = self.database_service.get_user(user_id)
         if not user or not user.switch_id or not user.switch_id.strip():
+            return False
+
+        # Check if user is botherable
+        if not user.botherable:
             return False
 
         return self.mqtt_service.bother_switch(user.switch_id, duration)
@@ -263,3 +265,38 @@ class ListGroupsCommand(BaseCommand):
             group_list.append(f"• `{group}` ({member_count} members)")
 
         context.respond("*Available Groups:*\n" + "\n".join(group_list))
+
+
+class UserSetCommand(BaseCommand):
+    """Handle user set command for configuring user settings"""
+
+    def __init__(self, database_service: DatabaseServiceInterface):
+        self.database_service = database_service
+        self.parser = create_user_set_parser()
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Any user can modify their own settings"""
+        return True
+
+    def execute(self, context: CommandContext) -> None:
+        """Execute user set command"""
+        try:
+            parsed_args = self.parser.parse_args(context.args)
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
+            return
+
+        # Determine the new botherable setting
+        botherable = parsed_args.bother
+
+        # Update the user's botherable setting
+        if self.database_service.set_botherable(context.user_id, botherable):
+            status = "enabled" if botherable else "disabled"
+            context.respond(
+                f"Successfully {status} bother notifications for your account."
+            )
+        else:
+            context.respond(
+                "Failed to update settings. You may need to register first."
+            )

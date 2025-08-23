@@ -20,6 +20,7 @@ class DatabaseUser(db.Entity):
     username = Required(str)
     is_admin = Required(bool, default=False)
     switch_id = Optional(str)
+    botherable = Required(bool, default=True)
     created_at = Required(datetime, default=datetime.now)
     groups = PonySet("DatabaseGroupMember")
 
@@ -59,16 +60,26 @@ class DatabaseManager:
 
     @db_session
     def add_user(
-        self, slack_user_id: str, username: str, is_admin: bool = False
+        self,
+        slack_user_id: str,
+        username: str,
+        is_admin: bool = False,
+        botherable: bool = True,
     ) -> bool:
         try:
             user = DatabaseUser.get(slack_user_id=slack_user_id)
             if user:
                 user.username = username
                 user.is_admin = is_admin
+                # Don't overwrite botherable for existing users unless explicitly specified
+                if hasattr(user, "botherable") and user.botherable is None:
+                    user.botherable = botherable
             else:
                 DatabaseUser(
-                    slack_user_id=slack_user_id, username=username, is_admin=is_admin
+                    slack_user_id=slack_user_id,
+                    username=username,
+                    is_admin=is_admin,
+                    botherable=botherable,
                 )
             return True
         except Exception as e:
@@ -84,6 +95,9 @@ class DatabaseManager:
                 username=user.username,
                 is_admin=user.is_admin,
                 switch_id=user.switch_id,
+                botherable=getattr(
+                    user, "botherable", True
+                ),  # Default to True for backward compatibility
                 created_at=user.created_at,
             )
         return None
@@ -102,6 +116,18 @@ class DatabaseManager:
             return False
         except Exception as e:
             logger.error(f"Error setting admin status: {e}")
+            return False
+
+    @db_session
+    def set_botherable(self, slack_user_id: str, botherable: bool) -> bool:
+        try:
+            user = DatabaseUser.get(slack_user_id=slack_user_id)
+            if user:
+                user.botherable = botherable
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error setting botherable status: {e}")
             return False
 
     @db_session
@@ -238,6 +264,9 @@ class DatabaseManager:
                 username=user.username,
                 is_admin=user.is_admin,
                 switch_id=user.switch_id,
+                botherable=getattr(
+                    user, "botherable", True
+                ),  # Default to True for backward compatibility
                 created_at=user.created_at,
             )
             for user in users

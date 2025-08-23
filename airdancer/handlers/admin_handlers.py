@@ -4,6 +4,7 @@ import logging
 from typing import Dict
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
+from ..utils.parsers import create_admin_user_set_parser
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,7 @@ class UserCommand(BaseCommand):
 
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
+        self.set_parser = create_admin_user_set_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Only admins can manage users"""
@@ -312,11 +314,11 @@ class UserCommand(BaseCommand):
             self._list_users(context)
         elif cmd == "show" and len(context.args) >= 2:
             self._show_user(context.args[1], context)
-        elif cmd == "set" and len(context.args) >= 3:
-            self._set_user(context.args[1], context.args[2], context)
+        elif cmd == "set" and len(context.args) >= 2:
+            self._set_user(context.args[1:], context)
         else:
             context.respond(
-                "Usage: `user [list|show <user>|set <user> [+admin|-admin]]`"
+                "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]]`"
             )
 
     def _list_users(self, context: CommandContext) -> None:
@@ -353,6 +355,7 @@ class UserCommand(BaseCommand):
             return
 
         admin_status = "Yes 👑" if user.is_admin else "No"
+        botherable_status = "Yes" if user.botherable else "No"
         switch_status = (
             user.switch_id if user.switch_id and user.switch_id.strip() else "None"
         )
@@ -360,29 +363,63 @@ class UserCommand(BaseCommand):
         context.respond(f"""*User Details:*
 • User: <@{user.slack_user_id}>
 • Admin: {admin_status}
+• Botherable: {botherable_status}
 • Switch: `{switch_status}`
 • Created: {user.created_at}""")
 
-    def _set_user(self, target_user: str, action: str, context: CommandContext) -> None:
-        """Set user properties"""
-        target_user_id = self._resolve_user_identifier(target_user, context)
-
-        if not target_user_id:
-            context.respond(f"Could not find user {target_user}")
+    def _set_user(self, args: list, context: CommandContext) -> None:
+        """Set user properties using argparse"""
+        try:
+            parsed_args = self.set_parser.parse_args(args)
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
             return
 
-        if action == "+admin":
+        target_user_id = self._resolve_user_identifier(parsed_args.user, context)
+        if not target_user_id:
+            context.respond(f"Could not find user {parsed_args.user}")
+            return
+
+        # Track what changes were made for response message
+        changes = []
+
+        # Handle admin setting
+        if parsed_args.admin:
             if self.database_service.set_admin(target_user_id, True):
-                context.respond(f"Granted admin privileges to <@{target_user_id}>.")
+                changes.append("granted admin privileges")
             else:
                 context.respond("Failed to grant admin privileges.")
-        elif action == "-admin":
+                return
+        elif parsed_args.no_admin:
             if self.database_service.set_admin(target_user_id, False):
-                context.respond(f"Revoked admin privileges from <@{target_user_id}>.")
+                changes.append("revoked admin privileges")
             else:
                 context.respond("Failed to revoke admin privileges.")
+                return
+
+        # Handle bother setting
+        if parsed_args.bother:
+            if self.database_service.set_botherable(target_user_id, True):
+                changes.append("enabled bother notifications")
+            else:
+                context.respond("Failed to enable bother notifications.")
+                return
+        elif parsed_args.no_bother:
+            if self.database_service.set_botherable(target_user_id, False):
+                changes.append("disabled bother notifications")
+            else:
+                context.respond("Failed to disable bother notifications.")
+                return
+
+        # Send success message
+        if changes:
+            change_text = " and ".join(changes)
+            context.respond(f"Successfully {change_text} for <@{target_user_id}>.")
         else:
-            context.respond("Usage: `user set <user> [+admin|-admin]`")
+            context.respond(
+                "No changes specified. Use --admin/--no-admin or --bother/--no-bother."
+            )
 
     def _resolve_user_identifier(
         self, user_str: str, context: CommandContext

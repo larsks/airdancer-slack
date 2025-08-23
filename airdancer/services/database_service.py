@@ -30,7 +30,11 @@ class DatabaseService(DatabaseServiceInterface):
         ] = {}  # Simple caching for frequently accessed users
 
     def add_user(
-        self, slack_user_id: str, username: str, is_admin: bool = False
+        self,
+        slack_user_id: str,
+        username: str,
+        is_admin: bool = False,
+        botherable: bool = True,
     ) -> bool:
         """Add a new user to the database with validation"""
         # Validate inputs
@@ -83,6 +87,10 @@ class DatabaseService(DatabaseServiceInterface):
     def set_admin(self, slack_user_id: str, is_admin: bool) -> bool:
         """Set admin status for user"""
         return self._db_manager.set_admin(slack_user_id, is_admin)
+
+    def set_botherable(self, slack_user_id: str, botherable: bool) -> bool:
+        """Set botherable status for user"""
+        return self._db_manager.set_botherable(slack_user_id, botherable)
 
     def register_switch(self, slack_user_id: str, switch_id: str) -> bool:
         """Register a switch to a user with comprehensive validation"""

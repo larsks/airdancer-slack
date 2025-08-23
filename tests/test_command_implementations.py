@@ -441,7 +441,7 @@ class TestAdminCommands:
 
     def test_user_set_admin_commands(self, mock_database_service, mock_context):
         """Test user set admin commands"""
-        mock_context.args = ["set", "<@U87654321>", "+admin"]
+        mock_context.args = ["set", "<@U87654321>", "--admin"]
         mock_user = User(
             slack_user_id="U87654321",
             username="testuser",
@@ -451,6 +451,7 @@ class TestAdminCommands:
         )
         mock_database_service.get_all_users.return_value = [mock_user]
         mock_database_service.set_admin.return_value = True
+        mock_context.client.users_info.return_value = {"ok": True}
 
         command = UserCommand(mock_database_service)
         command.execute(mock_context)
@@ -458,7 +459,7 @@ class TestAdminCommands:
         mock_database_service.set_admin.assert_called_once_with("U87654321", True)
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
-        assert "Granted admin privileges" in response
+        assert "granted admin privileges" in response
 
     def test_group_list_command(self, mock_database_service, mock_context):
         """Test group list command"""

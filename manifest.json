@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Airdancer",
-    "description": "Control physical switches via Slack for remote notifications"
+    "description": "Physical notification mechanism for the Red Hat Research team"
   },
   "features": {
     "app_home": {
@@ -16,14 +16,14 @@
     "slash_commands": [
       {
         "command": "/dancer",
-        "description": "Control Airdancer switches and manage users/groups",
-        "usage_hint": "[help|register|bother|users|groups|switch|user|group] [args...]",
+        "description": "Control Airdancer notification devices and manage users/groups",
+        "usage_hint": "[help|register|bother|users|groups] [args...]",
         "should_escape": false
       },
       {
         "command": "/bother",
-        "description": "Activate someone's switch for a specified duration",
-        "usage_hint": "[--duration <seconds>] <user_or_group>",
+        "description": "Send a notification to another user",
+        "usage_hint": "[-d <seconds>] <user_or_group>",
         "should_escape": false
       }
     ]

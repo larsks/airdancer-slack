@@ -10,6 +10,8 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from .config import AppConfig
 from .services import DatabaseService, MQTTService
 from .handlers import CommandContext, UserCommandHandler, AdminCommandHandler
+from .commands.router import CommandRouter
+from .error_handler import ErrorHandler
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG if os.environ.get("DEBUG") else logging.INFO)
@@ -39,7 +41,10 @@ class AirdancerApp:
         self.admin_handler = AdminCommandHandler(
             self.database_service, self.mqtt_service
         )
-        logger.info("⚙️  Command handlers configured")
+
+        # Initialize command router
+        self.command_router = CommandRouter(self.user_handler, self.admin_handler)
+        logger.info("⚙️  Command handlers and router configured")
 
         # Set up commands and events
         self._setup_commands()
@@ -73,29 +78,8 @@ class AirdancerApp:
                 user_id=user_id, args=args[1:], respond=respond, client=client
             )
 
-            # Ensure user exists in database
-            try:
-                user_info = client.users_info(user=user_id)
-                username = user_info["user"]["name"]
-                if not self.database_service.get_user(user_id):
-                    self.database_service.add_user(user_id, username)
-
-                # Check if this user should be made admin
-                self._ensure_admin_user(user_id, username)
-            except Exception as e:
-                logger.error(f"Error getting user info: {e}")
-
-            # Route commands
-            if cmd == "help":
-                self._handle_help(context)
-            elif cmd in ["register", "bother", "users", "groups"]:
-                self.user_handler.handle_command(cmd, context)
-            elif cmd in ["unregister", "switch", "user", "group"]:
-                self.admin_handler.handle_command(cmd, context)
-            else:
-                respond(
-                    f"Unknown command: {cmd}. Use `/dancer help` for available commands."
-                )
+            # Ensure user exists in database and route command
+            self._process_command(user_id, cmd, context, client)
 
     def _setup_events(self):
         """Set up Slack event handlers"""
@@ -127,27 +111,8 @@ class AirdancerApp:
                 user_id=user_id, args=args[1:], respond=respond, client=client
             )
 
-            # Ensure user exists in database
-            try:
-                user_info = client.users_info(user=user_id)
-                username = user_info["user"]["name"]
-                if not self.database_service.get_user(user_id):
-                    self.database_service.add_user(user_id, username)
-
-                # Check if this user should be made admin
-                self._ensure_admin_user(user_id, username)
-            except Exception as e:
-                logger.error(f"Error getting user info: {e}")
-
-            # Route commands (same logic as slash command)
-            if cmd == "help":
-                self._handle_help(context)
-            elif cmd in ["register", "bother", "users", "groups"]:
-                self.user_handler.handle_command(cmd, context)
-            elif cmd in ["unregister", "switch", "user", "group"]:
-                self.admin_handler.handle_command(cmd, context)
-            else:
-                respond(f"Unknown command: {cmd}. Type `help` for available commands.")
+            # Ensure user exists in database and route command
+            self._process_command(user_id, cmd, context, client)
 
         # Handle toggle button actions
         @self.slack_app.action(re.compile(r"toggle_switch_.*"))
@@ -210,42 +175,31 @@ class AirdancerApp:
                 self.database_service.set_admin(user_id, True)
                 logger.info(f"✅ Granted admin privileges to: {username} ({user_id})")
 
+    def _process_command(
+        self, user_id: str, cmd: str, context: CommandContext, client
+    ) -> None:
+        """Process a command with user setup and routing"""
+        try:
+            # Ensure user exists in database
+            user_info = client.users_info(user=user_id)
+            username = user_info["user"]["name"]
+            if not self.database_service.get_user(user_id):
+                self.database_service.add_user(user_id, username)
+
+            # Check if this user should be made admin
+            self._ensure_admin_user(user_id, username)
+
+            # Route command through the centralized router
+            self.command_router.route_command(cmd, context)
+
+        except Exception as e:
+            logger.error(f"Error processing command '{cmd}' for user {user_id}: {e}")
+            ErrorHandler.handle_command_error(e, context)
+
     def _handle_help(self, context: CommandContext) -> None:
-        """Handle help command"""
-        is_admin = self.database_service.is_admin(context.user_id)
-
-        help_text = """
-*User Commands:*
-• `register <switch>` - register a Tasmota switch to your user
-• `bother [--duration <n>] (<user>|<group>)` - activate switch for user or group (default 15 seconds)
-• `users` - list registered users
-• `groups` - list available groups
-• Use `all` to bother all users with registered switches
-
-*Note:* Commands work via `/dancer` slash commands or direct messages to this bot.
-"""
-
-        if is_admin:
-            help_text += """
-*Admin Commands:*
-• `unregister <user>` - remove switch registration for user
-• `switch list` - list discovered switches
-• `switch show <switch>` - show detailed information for a switch
-• `switch on <switch>` - turn switch on
-• `switch off <switch>` - turn switch off
-• `switch toggle <switch>` - toggle switch state
-• `user list` - list all users
-• `user show <user>` - show details for user
-• `user set <user> [+admin|-admin]` - grant/revoke admin privileges
-• `group list` - list all groups
-• `group show <name>` - show group members
-• `group create <name>` - create new group
-• `group destroy <name>` - delete group
-• `group add <name> <user> [<user> ...]` - add users to group
-• `group remove <name> <user> [<user> ...]` - remove users from group
-"""
-
-        context.respond(help_text)
+        """Legacy help handler for backward compatibility with tests"""
+        # Delegate to the command router
+        self.command_router._handle_help(context)
 
     def start(self):
         """Start the application"""

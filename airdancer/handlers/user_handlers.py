@@ -6,6 +6,7 @@ from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_bother_parser
 from ..utils.formatters import clean_switch_id
+# Error handling will be done on a case-by-case basis
 
 logger = logging.getLogger(__name__)
 
@@ -57,26 +58,17 @@ class RegisterCommand(BaseCommand):
 
         switch_id = clean_switch_id(context.args[0])
 
-        # Check if switch is already registered
-        if self.database_service.is_switch_registered(switch_id):
-            owner = self.database_service.get_switch_owner(switch_id)
-            if owner and owner.slack_user_id == context.user_id:
+        try:
+            if self.database_service.register_switch(context.user_id, switch_id):
                 context.respond(
-                    f"Switch `{switch_id}` is already registered to your account."
+                    f"Successfully registered switch `{switch_id}` to your account."
                 )
             else:
-                context.respond(
-                    f"Switch `{switch_id}` is already registered to another user. "
-                    "Please contact an administrator if you believe this is an error."
-                )
-            return
-
-        if self.database_service.register_switch(context.user_id, switch_id):
-            context.respond(
-                f"Successfully registered switch `{switch_id}` to your account."
-            )
-        else:
-            context.respond("Failed to register switch. Make sure you have an account.")
+                context.respond("Failed to register switch. Make sure you have an account.")
+        except Exception as e:
+            # Use the ErrorHandler for exceptions from the enhanced database service
+            from ..error_handler import ErrorHandler
+            ErrorHandler.handle_command_error(e, context)
 
 
 class BotherCommand(BaseCommand):

@@ -1,7 +1,7 @@
 """Regression test specifically for the missing message handler bug"""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 from airdancer.main import AirdancerApp
 from airdancer.config.settings import AppConfig
@@ -75,11 +75,12 @@ class TestMessageHandlerRegression:
             AirdancerApp(mock_config)
 
             # Verify BOTH handlers are registered
-            mock_slack_app.command.assert_called_with("/dancer")
+            expected_calls = [call("/dancer"), call("/bother")]
+            mock_slack_app.command.assert_has_calls(expected_calls, any_order=True)
             mock_slack_app.event.assert_called_with("message")
 
             # Ensure both were called (not just one)
-            assert mock_slack_app.command.called, "Slash command handler not registered"
+            assert mock_slack_app.command.call_count == 2, "Both slash command handlers not registered"
             assert mock_slack_app.event.called, "Message event handler not registered"
 
     def test_app_calls_both_setup_methods(self, mock_config):

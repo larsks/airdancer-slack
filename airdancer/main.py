@@ -81,6 +81,22 @@ class AirdancerApp:
             # Ensure user exists in database and route command
             self._process_command(user_id, cmd, context, client)
 
+        @self.slack_app.command("/bother")
+        def handle_bother_command(ack, respond, command, client):
+            ack()
+
+            user_id = command["user_id"]
+            text = command["text"].strip()
+            args = text.split() if text else []
+
+            # Create context for bother command
+            context = CommandContext(
+                user_id=user_id, args=args, respond=respond, client=client
+            )
+
+            # Ensure user exists in database and route to bother command
+            self._process_command(user_id, "bother", context, client)
+
     def _setup_events(self):
         """Set up Slack event handlers"""
 

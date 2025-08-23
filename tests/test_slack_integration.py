@@ -1,7 +1,7 @@
 """Integration tests for Slack app functionality"""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 from airdancer.main import AirdancerApp
 from airdancer.config.settings import AppConfig
@@ -53,12 +53,13 @@ class TestSlackIntegration:
         return AirdancerApp(mock_config)
 
     def test_slack_app_has_slash_command_handler(self, airdancer_app, mock_slack_app):
-        """Test that the Slack app registers a /dancer slash command handler"""
-        # Verify that the slack app's command decorator was called with /dancer
-        mock_slack_app.command.assert_called_with("/dancer")
+        """Test that the Slack app registers slash command handlers"""
+        # Verify that both /dancer and /bother commands were registered
+        expected_calls = [call("/dancer"), call("/bother")]
+        mock_slack_app.command.assert_has_calls(expected_calls, any_order=True)
 
-        # Verify the command handler was registered
-        assert mock_slack_app.command.call_count >= 1
+        # Verify the command handlers were registered
+        assert mock_slack_app.command.call_count == 2
 
     def test_slack_app_has_message_event_handler(self, airdancer_app, mock_slack_app):
         """Test that the Slack app registers a message event handler"""

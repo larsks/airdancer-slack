@@ -177,7 +177,9 @@ class BotherCommand(BaseCommand):
 
         if success:
             # Send a message to the target user informing them they've been bothered
-            self._send_bother_notification(user_id, context)
+            # Skip notification if user is bothering themselves
+            if user_id != context.user_id:
+                self._send_bother_notification(user_id, context)
 
         return success
 

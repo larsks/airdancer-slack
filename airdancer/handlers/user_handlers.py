@@ -6,6 +6,13 @@ from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_bother_parser, create_user_set_parser
 from ..utils.formatters import clean_switch_id
+from ..utils.slack_blocks import (
+    send_blocks_response,
+    create_header_block,
+    create_divider_block,
+    create_section_block,
+    create_button_accessory,
+)
 # Error handling will be done on a case-by-case basis
 
 logger = logging.getLogger(__name__)
@@ -266,20 +273,68 @@ class ListUsersCommand(BaseCommand):
     def execute(self, context: CommandContext) -> None:
         """List users with registered switches"""
         users = self.database_service.get_all_users()
-        registered_users = [u for u in users if u.switch_id and u.switch_id.strip()]
 
-        if not registered_users:
-            context.respond("No users are currently registered with switches.")
+        if not users:
+            context.respond("No users found in the system.")
             return
 
-        user_list = []
-        for user in registered_users:
-            admin_badge = " 👑" if user.is_admin else ""
-            user_list.append(
-                f"• <@{user.slack_user_id}> (switch: `{user.switch_id}`){admin_badge}"
+        blocks = [create_header_block("👥 User Directory"), create_divider_block()]
+
+        for user in users:
+            # Determine switch status
+            has_switch = bool(user.switch_id and user.switch_id.strip())
+            switch_status = (
+                f"Switch: `{user.switch_id}`" if has_switch else "No switch registered"
             )
 
-        context.respond("*Registered Users:*\n" + "\n".join(user_list))
+            # Determine botherable status
+            botherable_status = (
+                "✅ Botherable" if user.botherable else "🚫 Not botherable"
+            )
+
+            # Admin badge
+            admin_badge = " 👑" if user.is_admin else ""
+
+            # Create user section text
+            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{switch_status}\n{botherable_status}"
+
+            # Add bother button if user is botherable and has a switch
+            accessory = None
+            if has_switch and user.botherable:
+                accessory = create_button_accessory(
+                    "🔔 Bother", "bother_user", user.slack_user_id, "primary"
+                )
+
+            user_section = create_section_block(user_text, accessory=accessory)
+            blocks.append(user_section)
+            blocks.append(create_divider_block())
+
+        # Remove the last divider
+        if blocks and blocks[-1]["type"] == "divider":
+            blocks.pop()
+
+        # Create fallback text generator
+        def generate_fallback_text():
+            user_lines = []
+            for user in users:
+                has_switch = bool(user.switch_id and user.switch_id.strip())
+                switch_status = (
+                    f"Switch: `{user.switch_id}`"
+                    if has_switch
+                    else "No switch registered"
+                )
+                botherable_status = (
+                    "✅ Botherable" if user.botherable else "🚫 Not botherable"
+                )
+                admin_badge = " 👑" if user.is_admin else ""
+                user_lines.append(
+                    f"• <@{user.slack_user_id}>{admin_badge} - {switch_status} - {botherable_status}"
+                )
+            return "*👥 User Directory*\n" + "\n".join(user_lines)
+
+        send_blocks_response(
+            blocks, context.respond, "👥 User Directory", generate_fallback_text
+        )
 
 
 class ListGroupsCommand(BaseCommand):

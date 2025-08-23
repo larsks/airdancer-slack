@@ -173,6 +173,39 @@ class AirdancerApp:
             except Exception as e:
                 logger.error(f"Error sending toggle response: {e}")
 
+        # Handle bother button actions
+        @self.slack_app.action("bother_user")
+        def handle_bother_user(ack, body, client):
+            ack()
+
+            user_id = body["user"]["id"]
+            action = body["actions"][0]
+            target_user_id = action["value"]
+
+            logger.info(f"Bother button pressed by {user_id} for user {target_user_id}")
+
+            # Create a respond function that posts ephemeral messages
+            def respond(message):
+                try:
+                    client.chat_postEphemeral(
+                        channel=body["channel"]["id"],
+                        user=user_id,
+                        text=message,
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending ephemeral response: {e}")
+
+            # Create context for bother command
+            context = CommandContext(
+                user_id=user_id,
+                args=[f"<@{target_user_id}>"],
+                respond=respond,
+                client=client,
+            )
+
+            # Process the bother command
+            self._process_command(user_id, "bother", context, client)
+
     def _ensure_admin_user(self, user_id: str, username: str) -> None:
         """Check if this user should be made admin based on config"""
         if not self.config.admin_user:

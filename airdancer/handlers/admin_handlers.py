@@ -5,6 +5,14 @@ from typing import Dict
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_admin_user_set_parser
+from ..utils.slack_blocks import (
+    send_blocks_response,
+    create_header_block,
+    create_divider_block,
+    create_section_block,
+    create_button_accessory,
+    create_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +111,7 @@ class SwitchCommand(BaseCommand):
             context.respond("No switches have been discovered.")
             return
 
-        # Create Block Kit layout for switch list
-        blocks = [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "🔌 Discovered Switches"},
-            }
-        ]
+        blocks = [create_header_block("🔌 Discovered Switches")]
 
         for switch in switches:
             status_emoji = "🟢" if switch.status == "online" else "🔴"
@@ -144,78 +146,35 @@ class SwitchCommand(BaseCommand):
             else:
                 owner_text = "_Unregistered_"
 
-            # Add section block for each switch with toggle button
-            switch_block = {
-                "type": "section",
-                "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Switch ID:*\n`{switch.switch_id}`",
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Status:*\n{status_emoji} {status_text}",
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Power:*\n{power_emoji} {power_text}",
-                    },
-                    {"type": "mrkdwn", "text": f"*Owner:*\n{owner_text}"},
-                    {"type": "mrkdwn", "text": f"*Last Seen:*\n{last_seen_text}"},
-                ],
-                "accessory": {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Toggle"},
-                    "style": "primary",
-                    "action_id": f"toggle_switch_{switch.switch_id}",
-                    "value": switch.switch_id,
-                },
-            }
+            # Create fields for the switch information
+            fields = [
+                create_field("Switch ID", f"`{switch.switch_id}`"),
+                create_field("Status", f"{status_emoji} {status_text}"),
+                create_field("Power", f"{power_emoji} {power_text}"),
+                create_field("Owner", owner_text),
+                create_field("Last Seen", last_seen_text),
+            ]
 
+            # Create toggle button
+            toggle_button = create_button_accessory(
+                "Toggle",
+                f"toggle_switch_{switch.switch_id}",
+                switch.switch_id,
+                "primary",
+            )
+
+            # Create section block for switch
+            switch_block = create_section_block(
+                "", fields=fields, accessory=toggle_button
+            )
             blocks.append(switch_block)
 
             # Add divider between switches (except for the last one)
             if switch != switches[-1]:
-                blocks.append({"type": "divider"})
+                blocks.append(create_divider_block())
 
-        # Try different approaches for sending blocks
-        try:
-            # Method 1: Direct blocks parameter (for slash commands)
-            context.respond(blocks=blocks)
-        except TypeError:
-            try:
-                # Method 2: Dictionary with blocks (for some response types)
-                context.respond({"text": "Discovered Switches", "blocks": blocks})
-            except Exception:
-                # Method 3: Fallback to text format
-                logger.info("Blocks not supported, using text fallback")
-                switch_list = []
-                for switch in switches:
-                    status_emoji = "🟢" if switch.status == "online" else "🔴"
-                    power_emoji = ""
-                    if switch.power_state == "ON":
-                        power_emoji = " ⚡"
-                    elif switch.power_state == "OFF":
-                        power_emoji = " ⭕"
-                    elif switch.power_state == "unknown":
-                        power_emoji = " ❓"
-
-                    # Get owner info for text fallback
-                    owner_text = ""
-                    if switch.owner:
-                        owner_text = f" - <@{switch.owner.slack_user_id}>"
-                        if switch.owner.is_admin:
-                            owner_text += " 👑"
-                    else:
-                        owner_text = " - _Unregistered_"
-
-                    switch_list.append(
-                        f"• `{switch.switch_id}` {status_emoji}{power_emoji}{owner_text} (last seen: {switch.last_seen})"
-                    )
-                context.respond("*Discovered Switches:*\n" + "\n".join(switch_list))
-        except Exception as e:
-            logger.warning(f"Failed to send blocks: {e}")
-            # Final fallback to text format
+        # Create fallback text generator
+        def generate_fallback_text():
             switch_list = []
             for switch in switches:
                 status_emoji = "🟢" if switch.status == "online" else "🔴"
@@ -227,7 +186,7 @@ class SwitchCommand(BaseCommand):
                 elif switch.power_state == "unknown":
                     power_emoji = " ❓"
 
-                # Get owner info for final fallback
+                # Get owner info for text fallback
                 owner_text = ""
                 if switch.owner:
                     owner_text = f" - <@{switch.owner.slack_user_id}>"
@@ -239,7 +198,11 @@ class SwitchCommand(BaseCommand):
                 switch_list.append(
                     f"• `{switch.switch_id}` {status_emoji}{power_emoji}{owner_text} (last seen: {switch.last_seen})"
                 )
-            context.respond("*Discovered Switches:*\n" + "\n".join(switch_list))
+            return "*🔌 Discovered Switches:*\n" + "\n".join(switch_list)
+
+        send_blocks_response(
+            blocks, context.respond, "🔌 Discovered Switches", generate_fallback_text
+        )
 
     def _show_switch(self, switch_id: str, context: CommandContext) -> None:
         """Show detailed switch information"""

@@ -207,12 +207,43 @@ class TestUserCommands:
         command.execute(mock_context)
 
         mock_context.respond.assert_called_once()
-        response = mock_context.respond.call_args[0][0]
-        assert "Registered Users:" in response
-        assert "U12345678" in response
-        assert "U87654321" in response
-        assert "👑" in response  # Admin badge
-        assert "U11111111" not in response  # No switch registered
+
+        # Handle different call patterns from send_blocks_response
+        call_args = mock_context.respond.call_args
+        if call_args.kwargs and "blocks" in call_args.kwargs:
+            # Called with blocks keyword argument
+            blocks = call_args.kwargs["blocks"]
+            # Convert blocks to text for testing
+            response_text = ""
+            for block in blocks:
+                if block.get("type") == "header":
+                    response_text += block["text"]["text"] + "\n"
+                elif block.get("type") == "section":
+                    response_text += block["text"]["text"] + "\n"
+        elif (
+            call_args.args
+            and isinstance(call_args.args[0], dict)
+            and "blocks" in call_args.args[0]
+        ):
+            # Called with dict containing blocks
+            response_dict = call_args.args[0]
+            blocks = response_dict["blocks"]
+            response_text = ""
+            for block in blocks:
+                if block.get("type") == "header":
+                    response_text += block["text"]["text"] + "\n"
+                elif block.get("type") == "section":
+                    response_text += block["text"]["text"] + "\n"
+        else:
+            # Called with text fallback
+            response_text = call_args.args[0]
+
+        assert "User Directory" in response_text  # Updated header text
+        assert "U12345678" in response_text
+        assert "U87654321" in response_text
+        assert "👑" in response_text  # Admin badge
+        # Note: U11111111 might appear in blocks format, so we check for the switch status instead
+        assert "No switch registered" in response_text
 
     def test_list_groups_command(self, mock_database_service, mock_context):
         """Test list groups command"""

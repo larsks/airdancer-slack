@@ -1,7 +1,7 @@
 """Centralized command routing logic"""
 
 import logging
-from typing import Dict, Callable
+from typing import Callable
 from ..handlers.base import CommandContext
 from ..handlers.user_handlers import UserCommandHandler
 from ..handlers.admin_handlers import AdminCommandHandler
@@ -24,7 +24,7 @@ class CommandRouter:
 
     def _setup_routes(self) -> None:
         """Set up command routing table"""
-        self._routes: Dict[str, Callable[[CommandContext], None]] = {
+        self._routes: dict[str, Callable[[CommandContext], None]] = {
             # Help command
             "help": self._handle_help,
             # User commands

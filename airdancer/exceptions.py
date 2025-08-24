@@ -1,7 +1,6 @@
 """Custom exceptions for the Airdancer application"""
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 class AirdancerException(Exception):
     """Base exception for all Airdancer errors"""
 
-    def __init__(self, message: str, user_message: Optional[str] = None):
+    def __init__(self, message: str, user_message: str | None = None):
         super().__init__(message)
         self.user_message = user_message or message
 
@@ -27,7 +26,7 @@ class UserNotFoundError(AirdancerException):
 class SwitchRegistrationError(AirdancerException):
     """Raised when switch registration fails"""
 
-    def __init__(self, message: str, user_message: Optional[str] = None):
+    def __init__(self, message: str, user_message: str | None = None):
         super().__init__(
             message, user_message or "❌ Failed to register switch. Please try again."
         )
@@ -46,7 +45,7 @@ class SwitchAlreadyRegisteredError(SwitchRegistrationError):
 class MQTTConnectionError(AirdancerException):
     """Raised when MQTT operations fail"""
 
-    def __init__(self, operation: str, switch_id: Optional[str] = None):
+    def __init__(self, operation: str, switch_id: str | None = None):
         switch_info = f" for switch {switch_id}" if switch_id else ""
         super().__init__(
             f"MQTT {operation} failed{switch_info}",
@@ -57,7 +56,7 @@ class MQTTConnectionError(AirdancerException):
 class DatabaseError(AirdancerException):
     """Raised when database operations fail"""
 
-    def __init__(self, operation: str, details: Optional[str] = None):
+    def __init__(self, operation: str, details: str | None = None):
         message = f"Database {operation} failed"
         if details:
             message += f": {details}"

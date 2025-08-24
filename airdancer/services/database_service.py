@@ -2,7 +2,6 @@
 
 import os
 import logging
-from typing import List, Optional, Dict
 
 from .interfaces import DatabaseServiceInterface
 from ..models.entities import User, Switch, SwitchWithOwner, Owner
@@ -25,7 +24,7 @@ class DatabaseService(DatabaseServiceInterface):
         if not os.path.isabs(database_path):
             database_path = os.path.abspath(database_path)
         self._db_manager = DatabaseManager(database_path)
-        self._user_cache: Dict[
+        self._user_cache: dict[
             str, User
         ] = {}  # Simple caching for frequently accessed users
 
@@ -159,15 +158,15 @@ class DatabaseService(DatabaseServiceInterface):
         """Update switch power state"""
         return self._db_manager.update_switch_power_state(switch_id, power_state)
 
-    def get_all_switches(self) -> List[Switch]:
+    def get_all_switches(self) -> list[Switch]:
         """Get all switches"""
         return self._db_manager.get_all_switches()
 
-    def get_all_switches_with_owners(self) -> List[SwitchWithOwner]:
+    def get_all_switches_with_owners(self) -> list[SwitchWithOwner]:
         """Get all switches with owner information"""
         return self._db_manager.get_all_switches_with_owners()
 
-    def get_all_users(self) -> List[User]:
+    def get_all_users(self) -> list[User]:
         """Get all users"""
         return self._db_manager.get_all_users()
 
@@ -187,15 +186,15 @@ class DatabaseService(DatabaseServiceInterface):
         """Remove user from group"""
         return self._db_manager.remove_user_from_group(group_name, slack_user_id)
 
-    def get_group_members(self, group_name: str) -> List[str]:
+    def get_group_members(self, group_name: str) -> list[str]:
         """Get members of a group"""
         return self._db_manager.get_group_members(group_name)
 
-    def get_all_groups(self) -> List[str]:
+    def get_all_groups(self) -> list[str]:
         """Get all group names"""
         return self._db_manager.get_all_groups()
 
-    def clear_user_cache(self, slack_user_id: Optional[str] = None) -> None:
+    def clear_user_cache(self, slack_user_id: str | None = None) -> None:
         """Clear user cache for specific user or all users"""
         if slack_user_id:
             self._user_cache.pop(slack_user_id, None)

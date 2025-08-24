@@ -1,14 +1,14 @@
 """Utilities for Slack Block Kit responses"""
 
 import logging
-from typing import List, Dict, Any, Callable, Union
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 
 def send_blocks_response(
-    blocks: List[Dict[str, Any]],
-    context_respond: Callable[[Union[str, Dict[str, Any]]], None],
+    blocks: list[dict[str, Any]],
+    context_respond: Callable[[str | dict[str, Any]], None],
     fallback_text: str,
     fallback_content_generator: Callable[[], str] = None,
 ) -> None:
@@ -39,7 +39,7 @@ def send_blocks_response(
             context_respond(fallback_content)
 
 
-def create_header_block(title: str) -> Dict[str, Any]:
+def create_header_block(title: str) -> dict[str, Any]:
     """Create a header block with the given title."""
     return {
         "type": "header",
@@ -47,14 +47,14 @@ def create_header_block(title: str) -> Dict[str, Any]:
     }
 
 
-def create_divider_block() -> Dict[str, Any]:
+def create_divider_block() -> dict[str, Any]:
     """Create a divider block."""
     return {"type": "divider"}
 
 
 def create_section_block(
-    text: str, fields: List[Dict[str, Any]] = None, accessory: Dict[str, Any] = None
-) -> Dict[str, Any]:
+    text: str, fields: list[dict[str, Any]] = None, accessory: dict[str, Any] = None
+) -> dict[str, Any]:
     """
     Create a section block with optional fields and accessory.
 
@@ -82,7 +82,7 @@ def create_section_block(
 
 def create_button_accessory(
     text: str, action_id: str, value: str, style: str = "primary"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a button accessory for use in section blocks.
 
@@ -101,7 +101,7 @@ def create_button_accessory(
     }
 
 
-def create_field(title: str, content: str) -> Dict[str, Any]:
+def create_field(title: str, content: str) -> dict[str, Any]:
     """Create a field for use in section blocks."""
     return {
         "type": "mrkdwn",

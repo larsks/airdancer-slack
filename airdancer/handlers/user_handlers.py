@@ -1,7 +1,6 @@
 """User command handlers"""
 
 import logging
-from typing import Dict
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_bother_parser, create_user_set_parser
@@ -28,7 +27,7 @@ class UserCommandHandler:
     ):
         self.database_service = database_service
         self.mqtt_service = mqtt_service
-        self.commands: Dict[str, BaseCommand] = {
+        self.commands: dict[str, BaseCommand] = {
             "register": RegisterCommand(database_service),
             "bother": BotherCommand(database_service, mqtt_service),
             "users": ListUsersCommand(database_service),

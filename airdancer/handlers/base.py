@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, List, Union, Dict
+from typing import Any, Callable
 
 
 @dataclass
@@ -10,8 +10,8 @@ class CommandContext:
     """Context for command execution"""
 
     user_id: str
-    args: List[str]
-    respond: Callable[[Union[str, Dict[str, Any]]], None]
+    args: list[str]
+    respond: Callable[[str | dict[str, Any]], None]
     client: Any
 
 

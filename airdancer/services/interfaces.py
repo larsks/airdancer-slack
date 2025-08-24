@@ -1,7 +1,6 @@
 """Service interfaces for dependency injection"""
 
 from abc import ABC, abstractmethod
-from typing import List
 from ..models.entities import User, Switch, SwitchWithOwner, Owner
 
 
@@ -75,17 +74,17 @@ class DatabaseServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def get_all_switches(self) -> List[Switch]:
+    def get_all_switches(self) -> list[Switch]:
         """Get all switches"""
         pass
 
     @abstractmethod
-    def get_all_switches_with_owners(self) -> List[SwitchWithOwner]:
+    def get_all_switches_with_owners(self) -> list[SwitchWithOwner]:
         """Get all switches with owner information"""
         pass
 
     @abstractmethod
-    def get_all_users(self) -> List[User]:
+    def get_all_users(self) -> list[User]:
         """Get all users"""
         pass
 
@@ -110,12 +109,12 @@ class DatabaseServiceInterface(ABC):
         pass
 
     @abstractmethod
-    def get_group_members(self, group_name: str) -> List[str]:
+    def get_group_members(self, group_name: str) -> list[str]:
         """Get members of a group"""
         pass
 
     @abstractmethod
-    def get_all_groups(self) -> List[str]:
+    def get_all_groups(self) -> list[str]:
         """Get all group names"""
         pass
 

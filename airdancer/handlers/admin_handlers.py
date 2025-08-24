@@ -1,7 +1,6 @@
 """Admin command handlers"""
 
 import logging
-from typing import Dict
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_admin_user_set_parser
@@ -27,7 +26,7 @@ class AdminCommandHandler:
     ):
         self.database_service = database_service
         self.mqtt_service = mqtt_service
-        self.commands: Dict[str, BaseCommand] = {
+        self.commands: dict[str, BaseCommand] = {
             "unregister": UnregisterCommand(database_service),
             "switch": SwitchCommand(database_service, mqtt_service),
             "user": UserCommand(database_service),

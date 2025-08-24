@@ -5,6 +5,7 @@ from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
 from ..utils.parsers import create_bother_parser, create_user_set_parser
 from ..utils.formatters import clean_switch_id
+from ..utils.user_resolvers import resolve_user_identifier
 from ..utils.slack_blocks import (
     send_blocks_response,
     create_header_block,
@@ -218,47 +219,7 @@ class BotherCommand(BaseCommand):
         self, user_str: str, context: CommandContext
     ) -> str | None:
         """Resolve a user identifier to a Slack user ID"""
-        # Handle direct user ID format <@U12345>
-        if user_str.startswith("<@") and user_str.endswith(">"):
-            user_id = user_str[2:-1]
-            try:
-                context.client.users_info(user=user_id)
-                return user_id
-            except Exception:
-                return None
-
-        # Handle plain user ID format (U12345)
-        if user_str.startswith("U") and len(user_str) == 9:
-            try:
-                context.client.users_info(user=user_str)
-                return user_str
-            except Exception:
-                return None
-
-        # Handle username format @username or username
-        username = user_str[1:] if user_str.startswith("@") else user_str
-
-        # First check if we already have this user in our database
-        all_users = self.database_service.get_all_users()
-        for user in all_users:
-            if user.username == username:
-                return user.slack_user_id
-
-        # If not in database, try to look up by username using Slack API
-        try:
-            response = context.client.users_list()
-            if response["ok"]:
-                for user in response["members"]:
-                    if user.get("name") == username and not user.get("deleted", False):
-                        user_id = user["id"]
-                        # Add to database for future lookups
-                        if not self.database_service.get_user(user_id):
-                            self.database_service.add_user(user_id, username)
-                        return user_id
-        except Exception as e:
-            logger.warning(f"Error looking up user '{username}' via API: {e}")
-
-        return None
+        return resolve_user_identifier(user_str, context, self.database_service)
 
 
 class ListUsersCommand(BaseCommand):

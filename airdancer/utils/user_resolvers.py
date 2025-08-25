@@ -59,13 +59,9 @@ def resolve_user_identifier(
     # Handle username format @username or username
     username = user_str[1:] if user_str.startswith("@") else user_str
 
-    # Check if we already have this user in our database by username
-    # NOTE: This currently requires get_all_users() - ideally we should add
-    # get_user_by_username() to DatabaseServiceInterface for efficiency
-    all_users = database_service.get_all_users()
-    for user in all_users:
-        if user.username == username:
-            return user.slack_user_id
+    user = database_service.get_user_by_username(username)
+    if user:
+        return user.slack_user_id
 
     # If not in database, try to look up by username using Slack API
     try:

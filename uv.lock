@@ -24,7 +24,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "paho-mqtt", specifier = ">=2.1.0" },
-    { name = "pony", specifier = ">=0.7.16" },
+    { name = "pony", git = "https://github.com/larsks/pony?rev=feat%2Fpy313" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "slack-bolt", specifier = ">=1.23.0" },
@@ -94,11 +94,7 @@ wheels = [
 [[package]]
 name = "pony"
 version = "0.7.19"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/60/59/ab6542afa95de0d5a16545ce6ce683960352cfd9a2318722593b81a98123/pony-0.7.19.tar.gz", hash = "sha256:f7f83b2981893e49f7f18e8def52ad8fa8f8e6c5f9583b9aaed62d4d85036a0f", size = 258589, upload-time = "2024-08-27T12:29:29.963Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/cb/0ef8429024309fe6f5edf1debc7cf63adeaeb34b2242490cc18710658abd/pony-0.7.19-py3-none-any.whl", hash = "sha256:5112b4cf40d3f24e93ae66dc5ab7dc6813388efa870e750928d60dc699873cf5", size = 317259, upload-time = "2024-08-27T12:29:28.247Z" },
-]
+source = { git = "https://github.com/larsks/pony?rev=feat%2Fpy313#7feb1221953b7fa4a6735466bf21a8b4d35e33ba" }
 
 [[package]]
 name = "pydantic"

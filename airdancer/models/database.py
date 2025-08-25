@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from pony.orm import Database, Required, Optional, Set as PonySet, db_session
+from pony.orm import Database, Required, Optional, Set as PonySet, db_session, select
 
 from .entities import User, Switch, SwitchWithOwner, Owner
 
@@ -90,6 +90,30 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error adding user: {e}")
             return False
+
+    @db_session
+    def get_user_by_username(self, slack_username: str) -> User | None:
+        # XXX: This requires pony > 0.7.19 if you are using Python >= 3.13
+        users = DatabaseUser.select(lambda user: user.username == slack_username)
+        if not users:
+            logger.warning(f"no users matching username {slack_username}")
+            return None
+        if matches := len(users) > 1:
+            logger.warning(f"found {matches} matches for username {slack_username}")
+            return None
+
+        user = users.first()
+
+        return User(
+            slack_user_id=user.slack_user_id,
+            username=user.username,
+            is_admin=user.is_admin,
+            switch_id=user.switch_id,
+            botherable=getattr(
+                user, "botherable", True
+            ),  # Default to True for backward compatibility
+            created_at=user.created_at,
+        )
 
     @db_session
     def get_user(self, slack_user_id: str) -> User | None:

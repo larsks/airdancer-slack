@@ -79,6 +79,28 @@ class DatabaseService(DatabaseServiceInterface):
             logger.error(f"Failed to get user {slack_user_id}: {e}")
             raise DatabaseError("get_user", str(e))
 
+    def get_user_by_username(self, slack_username: str) -> User | None:
+        """Get user by Slack user ID with caching"""
+        if not slack_username or not slack_username.strip():
+            return None
+
+        slack_username = slack_username.strip()
+
+        # Check cache first
+        cachekey = f"name:{slack_username}"
+        if cachekey in self._user_cache:
+            return self._user_cache[cachekey]
+
+        try:
+            user = self._db_manager.get_user_by_username(slack_username)
+            if user:
+                # Cache the result
+                self._user_cache[cachekey] = user
+            return user
+        except Exception as e:
+            logger.error(f"Failed to get user {slack_username}: {e}")
+            raise DatabaseError("get_user", str(e))
+
     def is_admin(self, slack_user_id: str) -> bool:
         """Check if user is admin"""
         return self._db_manager.is_admin(slack_user_id)

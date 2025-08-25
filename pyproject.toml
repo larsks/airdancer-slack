@@ -18,3 +18,6 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.10",
 ]
+
+[tool.uv.sources]
+pony = { git = "https://github.com/larsks/pony", rev = "feat/py313" }

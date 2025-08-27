@@ -20,6 +20,8 @@ class CommandRouter:
     ):
         self.user_handler = user_handler
         self.admin_handler = admin_handler
+        # Access database service for admin checks
+        self.database_service = user_handler.database_service
         self._setup_routes()
 
     def _setup_routes(self) -> None:
@@ -60,7 +62,7 @@ class CommandRouter:
     def _handle_help(self, context: CommandContext) -> None:
         """Handle help command"""
         try:
-            help_text = self._get_help_text()
+            help_text = self._get_help_text(context)
             context.respond(help_text)
         except Exception as e:
             ErrorHandler.handle_command_error(e, context)
@@ -74,9 +76,11 @@ class CommandRouter:
             f"Use `help` for detailed information."
         )
 
-    def _get_help_text(self) -> str:
-        """Generate help text for all available commands"""
-        return """
+    def _get_help_text(self, context: CommandContext) -> str:
+        """Generate help text for available commands based on user privileges"""
+        is_admin = self.database_service.is_admin(context.user_id)
+
+        help_text = """
 *Available Commands:*
 
 *User Commands:*
@@ -84,7 +88,10 @@ class CommandRouter:
 • `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch
 • `set --bother|--no-bother` - Enable/disable bother notifications
 • `users` - List all registered users
-• `groups` - List all available groups
+• `groups` - List all available groups"""
+
+        if is_admin:
+            help_text += """
 
 *Admin Commands:*
 • `unregister <user>` - Remove a user's switch registration
@@ -101,16 +108,22 @@ class CommandRouter:
 • `group create <name>` - Create a new group
 • `group destroy <name>` - Delete a group
 • `group add <name> <user1> [user2...]` - Add users to a group
-• `group remove <name> <user1> [user2...]` - Remove users from a group
+• `group remove <name> <user1> [user2...]` - Remove users from a group"""
+
+        help_text += """
 
 *Examples:*
 • `/dancer register tasmota_12345`
 • `/dancer bother @username`
-• `/dancer bother --duration 30 mygroup`
+• `/dancer bother --duration 30 mygroup`"""
+
+        if is_admin:
+            help_text += """
 • `/dancer switch toggle tasmota_12345`
 
-*Note:* Admin commands require administrator privileges.
-        """.strip()
+*Note:* Admin commands require administrator privileges."""
+
+        return help_text.strip()
 
     def get_available_commands(self) -> list[str]:
         """Get list of available commands"""

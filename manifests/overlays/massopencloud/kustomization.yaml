@@ -3,12 +3,12 @@ kind: Kustomization
 resources:
 - ../../base
 
-nameSuffix: -prod
+nameSuffix: -moc
 
 labels:
 - includeSelectors: true
   pairs:
-    environment: prod
+    environment: massopencloud
 
 patches:
   - patch: |
@@ -23,4 +23,4 @@ patches:
             - name: airdancer-slack
               envFrom:
               - secretRef:
-                  name: airdancer-slack-config-prod
+                  name: airdancer-slack-config-moc

@@ -87,7 +87,7 @@ class CommandRouter:
 • `register <switch_id>` - Register a switch to your account
 • `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch
 • `set --bother|--no-bother` - Enable/disable bother notifications
-• `users` [--box] [--brief] - List all registered users
+• `users [--box] [--brief]` - List all registered users
 • `groups` - List all available groups
 
 For more information, visit https://airdancer.oddbit.com

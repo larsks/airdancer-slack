@@ -105,7 +105,7 @@ class TestUserCommands:
 
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
-        assert "Usage:" in response
+        assert "Error parsing arguments:" in response
 
     def test_bother_command_success(
         self, mock_database_service, mock_mqtt_service, mock_context
@@ -993,7 +993,8 @@ class TestCommandValidation:
         mock_context.args = []
 
         command = RegisterCommand(mock_database_service)
-        assert not command.can_execute(mock_context)
+        # With argparse, can_execute always returns True, error handling happens in execute
+        assert command.can_execute(mock_context)
 
     def test_bother_command_requires_args(
         self, mock_database_service, mock_mqtt_service, mock_context

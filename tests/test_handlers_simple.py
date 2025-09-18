@@ -129,7 +129,8 @@ class TestRegisterCommand:
         """Test can_execute without arguments"""
         context = Mock()
         context.args = []
-        assert command.can_execute(context) is False
+        # With argparse, can_execute always returns True, error handling happens in execute
+        assert command.can_execute(context) is True
 
     def test_execute_success(self, command, mock_context, mock_database_service):
         """Test successful registration"""
@@ -155,7 +156,7 @@ class TestRegisterCommand:
 
         context.respond.assert_called_once()
         response = context.respond.call_args[0][0]
-        assert "Usage:" in response
+        assert "Error parsing arguments:" in response
 
 
 class TestAdminCommandHandler:

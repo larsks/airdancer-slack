@@ -7,6 +7,8 @@ from ..utils.parsers import (
     create_admin_user_set_parser,
     create_switch_list_parser,
     create_admin_user_list_parser,
+    create_unregister_parser,
+    HelpRequestedException,
 )
 from ..utils.user_resolvers import resolve_user_identifier
 from ..utils.slack_blocks import (
@@ -62,6 +64,7 @@ class UnregisterCommand(BaseCommand):
 
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
+        self.parser = create_unregister_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Only admins can unregister users"""
@@ -69,12 +72,18 @@ class UnregisterCommand(BaseCommand):
 
     def execute(self, context: CommandContext) -> None:
         """Execute unregister command"""
-        if len(context.args) != 1:
-            context.respond("Usage: `unregister <user>`")
+        try:
+            parsed_args = self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
             return
 
         # This is simplified - in real implementation, you'd resolve user identifier
-        target_user = context.args[0]
+        target_user = parsed_args.user
 
         if self.database_service.unregister_user(target_user):
             context.respond("Successfully unregistered user.")
@@ -120,6 +129,9 @@ class SwitchCommand(BaseCommand):
         # Parse arguments for verbose and box flags
         try:
             parsed_args = self.list_parser.parse_args(args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             context.respond(f"Error parsing arguments: {str(e)}")
             return
@@ -401,6 +413,9 @@ class UserCommand(BaseCommand):
         # Parse arguments for verbose and box flags
         try:
             parsed_args = self.list_parser.parse_args(args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             context.respond(f"Error parsing arguments: {str(e)}")
             return
@@ -523,6 +538,9 @@ class UserCommand(BaseCommand):
         """Set user properties using argparse"""
         try:
             parsed_args = self.set_parser.parse_args(args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             error_msg = str(e)
             context.respond(f"Error parsing arguments: {error_msg}")

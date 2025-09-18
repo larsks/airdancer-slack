@@ -3,13 +3,68 @@
 import argparse
 
 
-def create_bother_parser() -> argparse.ArgumentParser:
+class HelpRequestedException(Exception):
+    """Exception raised when --help is requested"""
+
+    def __init__(self, help_text: str):
+        self.help_text = help_text
+        super().__init__("Help requested")
+
+
+class HelpRequestedAction(argparse.Action):
+    """Custom action that raises HelpRequestedException when --help is used"""
+
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        nargs=None,
+        const=None,
+        default=None,
+        type=None,
+        choices=None,
+        required=False,
+        help=None,
+        metavar=None,
+    ):
+        super().__init__(
+            option_strings,
+            dest,
+            0,  # nargs=0 means no value is consumed
+            const,
+            default,
+            type,
+            choices,
+            required,
+            help,
+            metavar,
+        )
+
+    def __call__(
+        self, parser: argparse.ArgumentParser, namespace, values, option_string=None
+    ):
+        raise HelpRequestedException(parser.format_help())
+
+
+class SlackCommandParser(argparse.ArgumentParser):
+    """Base class for Slack command parsers with standardized help handling"""
+
+    def __init__(self, *args, **kwargs):
+        # Force exit_on_error=False and add_help=False
+        kwargs["exit_on_error"] = False
+        kwargs["add_help"] = False
+        super().__init__(*args, **kwargs)
+        # Add standard --help option with custom action
+        self.add_argument(
+            "--help", action=HelpRequestedAction, help="Show this help message"
+        )
+
+
+def create_bother_parser() -> SlackCommandParser:
     """Create argument parser for bother command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="bother",
         description="Activate switch for user or group",
-        add_help=False,  # We'll handle help ourselves
-        exit_on_error=False,  # Don't call sys.exit on error
     )
     parser.add_argument(
         "--duration",
@@ -23,13 +78,11 @@ def create_bother_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_user_set_parser() -> argparse.ArgumentParser:
+def create_user_set_parser() -> SlackCommandParser:
     """Create argument parser for user set command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="set",
         description="Configure your user settings",
-        add_help=False,
-        exit_on_error=False,
     )
 
     bother_group = parser.add_mutually_exclusive_group(required=True)
@@ -47,13 +100,11 @@ def create_user_set_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_admin_user_set_parser() -> argparse.ArgumentParser:
+def create_admin_user_set_parser() -> SlackCommandParser:
     """Create argument parser for admin user set command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="user set",
         description="Configure user settings (admin)",
-        add_help=False,
-        exit_on_error=False,
     )
 
     parser.add_argument("user", help="User to modify (username or @mention)")
@@ -81,13 +132,11 @@ def create_admin_user_set_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_switch_list_parser() -> argparse.ArgumentParser:
+def create_switch_list_parser() -> SlackCommandParser:
     """Create argument parser for switch list command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="switch list",
         description="List all discovered switches",
-        add_help=False,
-        exit_on_error=False,
     )
     parser.add_argument(
         "--verbose",
@@ -105,13 +154,11 @@ def create_switch_list_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_users_list_parser() -> argparse.ArgumentParser:
+def create_users_list_parser() -> SlackCommandParser:
     """Create argument parser for users list command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="users",
         description="List all registered users",
-        add_help=False,
-        exit_on_error=False,
     )
     parser.add_argument(
         "--brief",
@@ -128,13 +175,11 @@ def create_users_list_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_admin_user_list_parser() -> argparse.ArgumentParser:
+def create_admin_user_list_parser() -> SlackCommandParser:
     """Create argument parser for admin user list command"""
-    parser = argparse.ArgumentParser(
+    parser = SlackCommandParser(
         prog="user list",
         description="List all registered users (admin only)",
-        add_help=False,
-        exit_on_error=False,
     )
     parser.add_argument(
         "--brief",
@@ -148,4 +193,33 @@ def create_admin_user_list_parser() -> argparse.ArgumentParser:
         help="Display table with box drawing characters",
     )
 
+    return parser
+
+
+def create_register_parser() -> SlackCommandParser:
+    """Create argument parser for register command"""
+    parser = SlackCommandParser(
+        prog="register",
+        description="Register a switch to your account",
+    )
+    parser.add_argument("switch_id", help="Switch ID to register")
+    return parser
+
+
+def create_unregister_parser() -> SlackCommandParser:
+    """Create argument parser for unregister command (admin only)"""
+    parser = SlackCommandParser(
+        prog="unregister",
+        description="Remove a user's switch registration (admin only)",
+    )
+    parser.add_argument("user", help="User to unregister (username or @mention)")
+    return parser
+
+
+def create_groups_parser() -> SlackCommandParser:
+    """Create argument parser for groups command"""
+    parser = SlackCommandParser(
+        prog="groups",
+        description="List all available groups",
+    )
     return parser

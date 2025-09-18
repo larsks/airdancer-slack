@@ -7,6 +7,9 @@ from ..utils.parsers import (
     create_bother_parser,
     create_user_set_parser,
     create_users_list_parser,
+    create_register_parser,
+    create_groups_parser,
+    HelpRequestedException,
 )
 from ..utils.formatters import clean_switch_id
 from ..utils.user_resolvers import resolve_user_identifier
@@ -62,18 +65,25 @@ class RegisterCommand(BaseCommand):
 
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
+        self.parser = create_register_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Check if register command can be executed"""
-        return len(context.args) >= 1
+        return True
 
     def execute(self, context: CommandContext) -> None:
         """Execute register command"""
-        if len(context.args) != 1:
-            context.respond("Usage: `register <switch>`")
+        try:
+            parsed_args = self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
             return
 
-        switch_id = clean_switch_id(context.args[0])
+        switch_id = clean_switch_id(parsed_args.switch_id)
 
         try:
             if self.database_service.register_switch(context.user_id, switch_id):
@@ -111,6 +121,9 @@ class BotherCommand(BaseCommand):
         """Execute bother command"""
         try:
             parsed_args = self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             error_msg = str(e)
             context.respond(f"Error parsing arguments: {error_msg}")
@@ -247,6 +260,9 @@ class ListUsersCommand(BaseCommand):
         # Parse arguments for verbose and box flags
         try:
             parsed_args = self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             context.respond(f"Error parsing arguments: {str(e)}")
             return
@@ -332,6 +348,7 @@ class ListGroupsCommand(BaseCommand):
 
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
+        self.parser = create_groups_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Anyone can list groups"""
@@ -339,6 +356,16 @@ class ListGroupsCommand(BaseCommand):
 
     def execute(self, context: CommandContext) -> None:
         """List all groups"""
+        try:
+            self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
+            return
+
         groups = self.database_service.get_all_groups()
 
         if not groups:
@@ -368,6 +395,9 @@ class UserSetCommand(BaseCommand):
         """Execute user set command"""
         try:
             parsed_args = self.parser.parse_args(context.args)
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
         except Exception as e:
             error_msg = str(e)
             context.respond(f"Error parsing arguments: {error_msg}")

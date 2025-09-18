@@ -43,6 +43,8 @@ The following commands are available:
 - `users [--box] [--brief]` - List all users. Use `--box` to get plain-text table, and `--brief` to get even simpler plain-text output.
 - `groups` - List all groups.
 
+You can start a private chat with the Airdancer app; in this case, you don't need to use the `/dancer` command; you can just send the commands as regular messages.
+
 ## Connecting to WiFi
 
 When you first plug in your Airdancer switch, it will create a WiFi network named `airdancer-<something>-<something>`. Connect to this network, then point your browser at <http://192.168.4.1>. This will allow you to enter credentials for your WiFi network:

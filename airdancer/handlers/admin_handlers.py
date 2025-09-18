@@ -3,7 +3,7 @@
 import logging
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
-from ..utils.parsers import create_admin_user_set_parser
+from ..utils.parsers import create_admin_user_set_parser, create_switch_list_parser
 from ..utils.user_resolvers import resolve_user_identifier
 from ..utils.slack_blocks import (
     send_blocks_response,
@@ -81,6 +81,7 @@ class SwitchCommand(BaseCommand):
     ):
         self.database_service = database_service
         self.mqtt_service = mqtt_service
+        self.list_parser = create_switch_list_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Only admins can manage switches"""
@@ -95,7 +96,7 @@ class SwitchCommand(BaseCommand):
         cmd = context.args[0].lower()
 
         if cmd == "list":
-            self._list_switches(context)
+            self._list_switches(context.args[1:], context)
         elif cmd == "show" and len(context.args) >= 2:
             self._show_switch(context.args[1], context)
         elif cmd in ["on", "off", "toggle"] and len(context.args) >= 2:
@@ -103,7 +104,21 @@ class SwitchCommand(BaseCommand):
         else:
             context.respond("Usage: `switch [list|show|on|off|toggle] [switch_id]`")
 
-    def _list_switches(self, context: CommandContext) -> None:
+    def _list_switches(self, args: list, context: CommandContext) -> None:
+        """List all switches with concise format by default or verbose format with --verbose"""
+        # Parse arguments for verbose flag
+        try:
+            parsed_args = self.list_parser.parse_args(args)
+        except Exception as e:
+            context.respond(f"Error parsing arguments: {str(e)}")
+            return
+
+        if parsed_args.verbose:
+            self._list_switches_verbose(context)
+        else:
+            self._list_switches_concise(context)
+
+    def _list_switches_verbose(self, context: CommandContext) -> None:
         """List all switches with interactive blocks and toggle buttons"""
         switches = self.database_service.get_all_switches_with_owners()
 
@@ -203,6 +218,66 @@ class SwitchCommand(BaseCommand):
         send_blocks_response(
             blocks, context.respond, "🔌 Discovered Switches", generate_fallback_text
         )
+
+    def _list_switches_concise(self, context: CommandContext) -> None:
+        """List all switches in a concise one-line-per-switch format"""
+        switches = self.database_service.get_all_switches_with_owners()
+
+        if not switches:
+            context.respond("No switches have been discovered.")
+            return
+
+        switch_lines = []
+        for switch in switches:
+            # Status indicator
+            status_emoji = "🟢" if switch.status == "online" else "🔴"
+
+            # Power state indicator
+            power_emoji = ""
+            power_text = ""
+            if switch.power_state == "ON":
+                power_emoji = "⚡"
+                power_text = "ON"
+            elif switch.power_state == "OFF":
+                power_emoji = "⭕"
+                power_text = "OFF"
+            else:
+                power_emoji = "❓"
+                power_text = "UNK"
+
+            # Format last seen date
+            try:
+                from datetime import datetime
+
+                last_seen = datetime.fromisoformat(str(switch.last_seen))
+                last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
+            except (ValueError, TypeError):
+                last_seen_text = str(switch.last_seen)
+
+            # Extract IP address from device_info
+            ip_address = "unknown"
+            if switch.device_info:
+                try:
+                    import json
+
+                    device_data = json.loads(switch.device_info)
+                    ip_address = device_data.get("ip", "unknown")
+                except (json.JSONDecodeError, TypeError):
+                    ip_address = "unknown"
+
+            # Format the line: switch_id | status | power | last_seen | ip
+            switch_lines.append(
+                f"`{switch.switch_id:<15}` {status_emoji} {power_emoji}{power_text:<3} {last_seen_text} {ip_address}"
+            )
+
+        header = (
+            "```\nSwitch ID        Status Power Last Seen        IP Address\n"
+            + "-" * 60
+            + "\n```"
+        )
+        switch_list = "\n".join(switch_lines)
+
+        context.respond(f"{header}\n{switch_list}")
 
     def _show_switch(self, switch_id: str, context: CommandContext) -> None:
         """Show detailed switch information"""

@@ -314,7 +314,7 @@ class TestAdminCommands:
     def test_switch_list_command(
         self, mock_database_service, mock_mqtt_service, mock_context
     ):
-        """Test switch list command"""
+        """Test switch list command with default concise format"""
         mock_context.args = ["list"]
         mock_owner = Owner(
             slack_user_id="U12345678", username="testuser", is_admin=True
@@ -325,7 +325,7 @@ class TestAdminCommands:
                 status="online",
                 power_state="ON",
                 last_seen=datetime.now(),
-                device_info="Device 1",
+                device_info='{"ip": "192.168.1.100"}',
                 owner=mock_owner,
             ),
             SwitchWithOwner(
@@ -333,7 +333,7 @@ class TestAdminCommands:
                 status="offline",
                 power_state="OFF",
                 last_seen=datetime.now(),
-                device_info="Device 2",
+                device_info='{"ip": "192.168.1.101"}',
                 owner=None,
             ),
         ]
@@ -344,8 +344,45 @@ class TestAdminCommands:
 
         mock_context.respond.assert_called()
 
-        # The new implementation first tries to send blocks, then falls back to text
-        # Check if blocks were attempted first
+        # The new implementation uses concise format by default
+        call_args = mock_context.respond.call_args
+        response = call_args[0][0] if call_args[0] else str(call_args)
+
+        # Check for concise format elements
+        assert "Switch ID" in response  # Header
+        assert "switch001" in response
+        assert "switch002" in response
+        assert "🟢" in response  # Online status
+        assert "🔴" in response  # Offline status
+        assert "192.168.1.100" in response  # IP address
+        assert "192.168.1.101" in response  # IP address
+
+    def test_switch_list_command_verbose(
+        self, mock_database_service, mock_mqtt_service, mock_context
+    ):
+        """Test switch list command with verbose flag"""
+        mock_context.args = ["list", "--verbose"]
+        mock_owner = Owner(
+            slack_user_id="U12345678", username="testuser", is_admin=True
+        )
+        mock_switches = [
+            SwitchWithOwner(
+                switch_id="switch001",
+                status="online",
+                power_state="ON",
+                last_seen=datetime.now(),
+                device_info='{"ip": "192.168.1.100"}',
+                owner=mock_owner,
+            ),
+        ]
+        mock_database_service.get_all_switches_with_owners.return_value = mock_switches
+
+        command = SwitchCommand(mock_database_service, mock_mqtt_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called()
+
+        # The verbose implementation uses blocks or falls back to text
         call_args = mock_context.respond.call_args
 
         # It could be called with blocks keyword argument or with text fallback
@@ -354,13 +391,11 @@ class TestAdminCommands:
             blocks = call_args.kwargs["blocks"]
             assert any("Discovered Switches" in str(block) for block in blocks)
             assert any("switch001" in str(block) for block in blocks)
-            assert any("switch002" in str(block) for block in blocks)
         else:
             # Text fallback was used
             response = call_args[0][0] if call_args[0] else str(call_args)
             assert "Discovered Switches" in response
             assert "switch001" in response
-            assert "switch002" in response
             assert "🟢" in response  # Online status
             assert "👑" in response  # Admin badge
 

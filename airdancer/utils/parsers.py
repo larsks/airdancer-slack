@@ -79,3 +79,21 @@ def create_admin_user_set_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def create_switch_list_parser() -> argparse.ArgumentParser:
+    """Create argument parser for switch list command"""
+    parser = argparse.ArgumentParser(
+        prog="switch list",
+        description="List all discovered switches",
+        add_help=False,
+        exit_on_error=False,
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed switch information in interactive format",
+    )
+
+    return parser

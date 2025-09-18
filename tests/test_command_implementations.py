@@ -177,7 +177,7 @@ class TestUserCommands:
         assert "Bothered 2 members" in response
 
     def test_list_users_command(self, mock_database_service, mock_context):
-        """Test list users command with default format"""
+        """Test list users command with default format (now verbose)"""
         mock_context.args = []
         mock_users = [
             User(
@@ -209,23 +209,26 @@ class TestUserCommands:
 
         mock_context.respond.assert_called_once()
 
-        # The new default format uses plain text table
+        # The new default format uses verbose (blocks) or falls back to text
         call_args = mock_context.respond.call_args
-        response_text = call_args[0][0] if call_args[0] else str(call_args)
 
-        # Check for plain text table format elements
-        assert "Username" in response_text  # Header
-        assert "Admin" in response_text  # Header
-        assert "Botherable" in response_text  # Header
-        assert "user1" in response_text
-        assert "user2" in response_text
-        assert "user3" in response_text
-        assert "yes" in response_text  # Admin status
-        assert "no" in response_text  # Admin status
+        # It could be called with blocks keyword argument or with text fallback
+        if call_args.kwargs and "blocks" in call_args.kwargs:
+            # Block-based response was used
+            blocks = call_args.kwargs["blocks"]
+            assert any("User Directory" in str(block) for block in blocks)
+            assert any("U12345678" in str(block) for block in blocks)
+            assert any("👑" in str(block) for block in blocks)  # Admin badge
+        else:
+            # Text fallback was used
+            response = call_args[0][0] if call_args[0] else str(call_args)
+            assert "User Directory" in response
+            assert "U12345678" in response
+            assert "👑" in response  # Admin badge
 
-    def test_list_users_command_verbose(self, mock_database_service, mock_context):
-        """Test list users command with verbose flag"""
-        mock_context.args = ["--verbose"]
+    def test_list_users_command_brief(self, mock_database_service, mock_context):
+        """Test list users command with brief flag"""
+        mock_context.args = ["--brief"]
         mock_users = [
             User(
                 slack_user_id="U12345678",
@@ -249,22 +252,18 @@ class TestUserCommands:
 
         mock_context.respond.assert_called_once()
 
-        # The verbose format uses blocks or falls back to text
+        # The brief format uses plain text table
         call_args = mock_context.respond.call_args
+        response_text = call_args[0][0] if call_args[0] else str(call_args)
 
-        # It could be called with blocks keyword argument or with text fallback
-        if call_args.kwargs and "blocks" in call_args.kwargs:
-            # Block-based response was used
-            blocks = call_args.kwargs["blocks"]
-            assert any("User Directory" in str(block) for block in blocks)
-            assert any("U12345678" in str(block) for block in blocks)
-            assert any("👑" in str(block) for block in blocks)  # Admin badge
-        else:
-            # Text fallback was used
-            response = call_args[0][0] if call_args[0] else str(call_args)
-            assert "User Directory" in response
-            assert "U12345678" in response
-            assert "👑" in response  # Admin badge
+        # Check for plain text table format elements
+        assert "Username" in response_text  # Header
+        assert "Admin" in response_text  # Header
+        assert "Botherable" in response_text  # Header
+        assert "user1" in response_text
+        assert "user2" in response_text
+        assert "yes" in response_text  # Admin status
+        assert "no" in response_text  # Admin status
 
     def test_list_users_command_box(self, mock_database_service, mock_context):
         """Test list users command with box flag"""
@@ -593,8 +592,52 @@ class TestAdminCommands:
             assert f"Successfully {action}" in response
 
     def test_user_list_command(self, mock_database_service, mock_context):
-        """Test admin user list command with default format"""
+        """Test admin user list command with default format (now verbose)"""
         mock_context.args = ["list"]
+        mock_users = [
+            User(
+                slack_user_id="U12345678",
+                username="user1",
+                switch_id="switch001",
+                is_admin=False,
+                created_at=datetime.now(),
+            ),
+            User(
+                slack_user_id="U87654321",
+                username="user2",
+                switch_id=None,
+                is_admin=True,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_database_service.get_all_users.return_value = mock_users
+
+        command = UserCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called_once()
+
+        # The new default format uses verbose (blocks) or falls back to text
+        call_args = mock_context.respond.call_args
+
+        # It could be called with blocks keyword argument or with text fallback
+        if call_args.kwargs and "blocks" in call_args.kwargs:
+            # Block-based response was used
+            blocks = call_args.kwargs["blocks"]
+            assert any("User Directory" in str(block) for block in blocks)
+            assert any("U12345678" in str(block) for block in blocks)
+            assert any("👑" in str(block) for block in blocks)  # Admin badge
+            assert any("Switch:" in str(block) for block in blocks)  # Switch info
+        else:
+            # Text fallback was used
+            response = call_args[0][0] if call_args[0] else str(call_args)
+            assert "User Directory" in response
+            assert "U12345678" in response
+            assert "👑" in response  # Admin badge
+
+    def test_user_list_command_brief(self, mock_database_service, mock_context):
+        """Test admin user list command with brief flag"""
+        mock_context.args = ["list", "--brief"]
         mock_users = [
             User(
                 slack_user_id="U12345678",
@@ -619,7 +662,7 @@ class TestAdminCommands:
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
 
-        # Check for new table format elements
+        # Check for plain text table format elements
         assert "Username" in response  # Header
         assert "Admin" in response  # Header
         assert "Botherable" in response  # Header
@@ -630,51 +673,6 @@ class TestAdminCommands:
         assert "unassigned" in response  # For user2 with no switch
         assert "yes" in response  # Admin status
         assert "no" in response  # Admin status
-
-    def test_user_list_command_verbose(self, mock_database_service, mock_context):
-        """Test admin user list command with verbose flag"""
-        mock_context.args = ["list", "--verbose"]
-        mock_users = [
-            User(
-                slack_user_id="U12345678",
-                username="user1",
-                switch_id="switch001",
-                is_admin=False,
-                created_at=datetime.now(),
-            ),
-            User(
-                slack_user_id="U87654321",
-                username="user2",
-                switch_id=None,
-                is_admin=True,
-                created_at=datetime.now(),
-            ),
-        ]
-        mock_database_service.get_all_users.return_value = mock_users
-
-        command = UserCommand(mock_database_service)
-        command.execute(mock_context)
-
-        mock_context.respond.assert_called_once()
-
-        # The verbose format uses blocks or falls back to text
-        call_args = mock_context.respond.call_args
-
-        # It could be called with blocks keyword argument or with text fallback
-        if call_args.kwargs and "blocks" in call_args.kwargs:
-            # Block-based response was used
-            blocks = call_args.kwargs["blocks"]
-            assert any("User Directory" in str(block) for block in blocks)
-            assert any("U12345678" in str(block) for block in blocks)
-            assert any("👑" in str(block) for block in blocks)  # Admin badge
-            assert any("Switch:" in str(block) for block in blocks)  # Switch info
-        else:
-            # Text fallback was used
-            response = call_args[0][0] if call_args[0] else str(call_args)
-            assert "User Directory" in response
-            assert "U12345678" in response
-            assert "👑" in response  # Admin badge
-            assert "Switch:" in response  # Switch info
 
     def test_user_list_command_box(self, mock_database_service, mock_context):
         """Test admin user list command with box flag"""

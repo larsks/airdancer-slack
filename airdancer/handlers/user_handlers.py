@@ -257,12 +257,12 @@ class ListUsersCommand(BaseCommand):
             context.respond("No users found in the system.")
             return
 
-        if parsed_args.verbose:
-            self._list_users_verbose(users, context)
+        if parsed_args.brief:
+            self._list_users_concise(users, context)
         elif parsed_args.box:
             self._list_users_box(users, context)
         else:
-            self._list_users_concise(users, context)
+            self._list_users_verbose(users, context)
 
     def _list_users_verbose(self, users, context: CommandContext) -> None:
         """List users with interactive blocks and buttons (original format)"""

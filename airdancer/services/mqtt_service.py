@@ -106,7 +106,9 @@ class MQTTService(MQTTServiceInterface):
             switch_id = data.get("t")
 
             if not switch_id:
-                logger.warning(f"Received discovery message with no switch id: {json.dumps(data)}")
+                logger.warning(
+                    f"Received discovery message with no switch id: {json.dumps(data)}"
+                )
                 return
 
             device_info = {

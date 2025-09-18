@@ -114,10 +114,9 @@ def create_users_list_parser() -> argparse.ArgumentParser:
         exit_on_error=False,
     )
     parser.add_argument(
-        "--verbose",
-        "-v",
+        "--brief",
         action="store_true",
-        help="Show detailed user information in interactive format",
+        help="Show simple plain-text table format",
     )
     parser.add_argument(
         "--box",
@@ -138,10 +137,9 @@ def create_admin_user_list_parser() -> argparse.ArgumentParser:
         exit_on_error=False,
     )
     parser.add_argument(
-        "--verbose",
-        "-v",
+        "--brief",
         action="store_true",
-        help="Show detailed user information in interactive format",
+        help="Show simple plain-text table format",
     )
     parser.add_argument(
         "--box",

@@ -180,6 +180,10 @@ class DatabaseService(DatabaseServiceInterface):
         """Update switch power state"""
         return self._db_manager.update_switch_power_state(switch_id, power_state)
 
+    def get_switch(self, switch_id: str) -> Switch | None:
+        """Get a specific switch"""
+        return self._db_manager.get_switch(switch_id)
+
     def get_all_switches(self) -> list[Switch]:
         """Get all switches"""
         return self._db_manager.get_all_switches()

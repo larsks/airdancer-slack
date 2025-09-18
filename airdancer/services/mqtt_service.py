@@ -105,15 +105,20 @@ class MQTTService(MQTTServiceInterface):
             data = json.loads(payload)
             switch_id = data.get("t")
 
-            if switch_id and switch_id not in self.discovered_switches:
+            if not switch_id:
+                logger.warning(f"Received discovery message with no switch id: {json.dumps(data)}")
+                return
+
+            device_info = {
+                "ip": data.get("ip"),
+                "hostname": data.get("hn"),
+                "mac": data.get("mac"),
+                "model": data.get("md"),
+                "software": data.get("sw"),
+            }
+
+            if switch_id not in self.discovered_switches:
                 self.discovered_switches.add(switch_id)
-                device_info = {
-                    "ip": data.get("ip"),
-                    "hostname": data.get("hn"),
-                    "mac": data.get("mac"),
-                    "model": data.get("md"),
-                    "software": data.get("sw"),
-                }
                 self.database_service.add_switch(switch_id, json.dumps(device_info))
                 logger.info(f"🔌 Discovered new Tasmota switch: {switch_id}")
                 logger.info(f"   └─ IP: {device_info.get('ip', 'unknown')}")
@@ -126,7 +131,37 @@ class MQTTService(MQTTServiceInterface):
                 logger.info(f"   └─ Querying power state for {switch_id}")
                 self.query_power_state(switch_id)
             elif switch_id:
-                logger.debug(f"Switch {switch_id} already discovered, ignoring")
+                # Switch already discovered, check for updates
+                existing_switch = self.database_service.get_switch(switch_id)
+                if existing_switch:
+                    new_device_info = device_info
+
+                    # Compare with existing device info
+                    try:
+                        old_device_info = (
+                            json.loads(existing_switch.device_info)
+                            if existing_switch.device_info
+                            else {}
+                        )
+                    except (json.JSONDecodeError, TypeError):
+                        old_device_info = {}
+
+                    changes = []
+                    for key, new_value in new_device_info.items():
+                        old_value = old_device_info.get(key)
+                        if old_value != new_value:
+                            changes.append(f"{key}: {old_value} → {new_value}")
+
+                    if changes:
+                        # Update the switch with new device info
+                        self.database_service.add_switch(
+                            switch_id, json.dumps(new_device_info)
+                        )
+                        logger.info(f"🔄 Updated Tasmota switch: {switch_id}")
+                        for change in changes:
+                            logger.info(f"   └─ {change}")
+                    else:
+                        logger.debug(f"Switch {switch_id} rediscovered with no changes")
         except Exception as e:
             logger.error(f"Error handling discovery message: {e}")
             logger.error(f"Problematic payload: {payload}")

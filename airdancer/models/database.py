@@ -236,6 +236,23 @@ class DatabaseManager:
             return False
 
     @db_session
+    def get_switch(self, switch_id: str) -> Switch | None:
+        try:
+            switch = DatabaseSwitch.get(switch_id=switch_id)
+            if switch:
+                return Switch(
+                    switch_id=switch.switch_id,
+                    status=switch.status,
+                    power_state=switch.power_state,
+                    last_seen=switch.last_seen,
+                    device_info=switch.device_info,
+                )
+            return None
+        except Exception as e:
+            logger.error(f"Error getting switch: {e}")
+            return None
+
+    @db_session
     def get_all_switches(self) -> list[Switch]:
         switches = list(DatabaseSwitch.select())
         return [

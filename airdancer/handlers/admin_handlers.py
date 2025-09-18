@@ -3,7 +3,11 @@
 import logging
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
-from ..utils.parsers import create_admin_user_set_parser, create_switch_list_parser
+from ..utils.parsers import (
+    create_admin_user_set_parser,
+    create_switch_list_parser,
+    create_admin_user_list_parser,
+)
 from ..utils.user_resolvers import resolve_user_identifier
 from ..utils.slack_blocks import (
     send_blocks_response,
@@ -11,7 +15,14 @@ from ..utils.slack_blocks import (
     create_divider_block,
     create_section_block,
     create_button_accessory,
-    create_field,
+)
+from ..utils.table_formatters import (
+    process_switch_data,
+    format_plain_table,
+    format_box_table,
+    process_admin_user_data,
+    format_admin_users_plain_table,
+    format_admin_users_box_table,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,7 +117,7 @@ class SwitchCommand(BaseCommand):
 
     def _list_switches(self, args: list, context: CommandContext) -> None:
         """List all switches with concise format by default or verbose format with --verbose"""
-        # Parse arguments for verbose flag
+        # Parse arguments for verbose and box flags
         try:
             parsed_args = self.list_parser.parse_args(args)
         except Exception as e:
@@ -115,6 +126,8 @@ class SwitchCommand(BaseCommand):
 
         if parsed_args.verbose:
             self._list_switches_verbose(context)
+        elif parsed_args.box:
+            self._list_switches_box(context)
         else:
             self._list_switches_concise(context)
 
@@ -161,13 +174,43 @@ class SwitchCommand(BaseCommand):
             else:
                 owner_text = "_Unregistered_"
 
-            # Create fields for the switch information
+            # Extract IP address from device_info
+            ip_address = "unknown"
+            if switch.device_info:
+                try:
+                    import json
+
+                    device_data = json.loads(switch.device_info)
+                    ip_address = device_data.get("ip", "unknown")
+                except (json.JSONDecodeError, TypeError):
+                    ip_address = "unknown"
+
+            # Create fields for the switch information (compact format - single line)
             fields = [
-                create_field("Switch ID", f"`{switch.switch_id}`"),
-                create_field("Status", f"{status_emoji} {status_text}"),
-                create_field("Power", f"{power_emoji} {power_text}"),
-                create_field("Owner", owner_text),
-                create_field("Last Seen", last_seen_text),
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Switch ID:* `{switch.switch_id}`",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Status:* {status_emoji} {status_text}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Power:* {power_emoji} {power_text}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Owner:* {owner_text}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Last Seen:* {last_seen_text}",
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*IP Address:* {ip_address}",
+                },
             ]
 
             # Create toggle button
@@ -194,24 +237,49 @@ class SwitchCommand(BaseCommand):
             for switch in switches:
                 status_emoji = "🟢" if switch.status == "online" else "🔴"
                 power_emoji = ""
+                power_text = ""
                 if switch.power_state == "ON":
                     power_emoji = " ⚡"
+                    power_text = "On"
                 elif switch.power_state == "OFF":
                     power_emoji = " ⭕"
+                    power_text = "Off"
                 elif switch.power_state == "unknown":
                     power_emoji = " ❓"
+                    power_text = "Unknown"
 
                 # Get owner info for text fallback
                 owner_text = ""
                 if switch.owner:
-                    owner_text = f" - <@{switch.owner.slack_user_id}>"
+                    owner_text = f"<@{switch.owner.slack_user_id}>"
                     if switch.owner.is_admin:
                         owner_text += " 👑"
                 else:
-                    owner_text = " - _Unregistered_"
+                    owner_text = "_Unregistered_"
 
+                # Extract IP address from device_info
+                ip_address = "unknown"
+                if switch.device_info:
+                    try:
+                        import json
+
+                        device_data = json.loads(switch.device_info)
+                        ip_address = device_data.get("ip", "unknown")
+                    except (json.JSONDecodeError, TypeError):
+                        ip_address = "unknown"
+
+                # Format last seen date
+                try:
+                    from datetime import datetime
+
+                    last_seen = datetime.fromisoformat(str(switch.last_seen))
+                    last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError):
+                    last_seen_text = str(switch.last_seen)
+
+                # Compact format: all info on single line with labels
                 switch_list.append(
-                    f"• `{switch.switch_id}` {status_emoji}{power_emoji}{owner_text} (last seen: {switch.last_seen})"
+                    f"• `{switch.switch_id}` - Status: {status_emoji}{switch.status.title()} - Power: {power_emoji}{power_text} - Owner: {owner_text} - Last Seen: {last_seen_text} - IP: {ip_address}"
                 )
             return "*🔌 Discovered Switches:*\n" + "\n".join(switch_list)
 
@@ -220,64 +288,30 @@ class SwitchCommand(BaseCommand):
         )
 
     def _list_switches_concise(self, context: CommandContext) -> None:
-        """List all switches in a concise one-line-per-switch format"""
+        """List all switches in a concise plain-text table format"""
         switches = self.database_service.get_all_switches_with_owners()
 
         if not switches:
             context.respond("No switches have been discovered.")
             return
 
-        switch_lines = []
-        for switch in switches:
-            # Status indicator
-            status_emoji = "🟢" if switch.status == "online" else "🔴"
+        # Use shared data processing logic
+        rows = process_switch_data(switches)
+        table_output = format_plain_table(rows)
+        context.respond(table_output)
 
-            # Power state indicator
-            power_emoji = ""
-            power_text = ""
-            if switch.power_state == "ON":
-                power_emoji = "⚡"
-                power_text = "ON"
-            elif switch.power_state == "OFF":
-                power_emoji = "⭕"
-                power_text = "OFF"
-            else:
-                power_emoji = "❓"
-                power_text = "UNK"
+    def _list_switches_box(self, context: CommandContext) -> None:
+        """List all switches in a box table format using Unicode box drawing characters"""
+        switches = self.database_service.get_all_switches_with_owners()
 
-            # Format last seen date
-            try:
-                from datetime import datetime
+        if not switches:
+            context.respond("No switches have been discovered.")
+            return
 
-                last_seen = datetime.fromisoformat(str(switch.last_seen))
-                last_seen_text = last_seen.strftime("%Y-%m-%d %H:%M")
-            except (ValueError, TypeError):
-                last_seen_text = str(switch.last_seen)
-
-            # Extract IP address from device_info
-            ip_address = "unknown"
-            if switch.device_info:
-                try:
-                    import json
-
-                    device_data = json.loads(switch.device_info)
-                    ip_address = device_data.get("ip", "unknown")
-                except (json.JSONDecodeError, TypeError):
-                    ip_address = "unknown"
-
-            # Format the line: switch_id | status | power | last_seen | ip
-            switch_lines.append(
-                f"`{switch.switch_id:<15}` {status_emoji} {power_emoji}{power_text:<3} {last_seen_text} {ip_address}"
-            )
-
-        header = (
-            "```\nSwitch ID        Status Power Last Seen        IP Address\n"
-            + "-" * 60
-            + "\n```"
-        )
-        switch_list = "\n".join(switch_lines)
-
-        context.respond(f"{header}\n{switch_list}")
+        # Use shared data processing logic
+        rows = process_switch_data(switches)
+        table_output = format_box_table(rows)
+        context.respond(table_output)
 
     def _show_switch(self, switch_id: str, context: CommandContext) -> None:
         """Show detailed switch information"""
@@ -335,6 +369,7 @@ class UserCommand(BaseCommand):
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
         self.set_parser = create_admin_user_set_parser()
+        self.list_parser = create_admin_user_list_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Only admins can manage users"""
@@ -349,7 +384,7 @@ class UserCommand(BaseCommand):
         cmd = context.args[0].lower()
 
         if cmd == "list":
-            self._list_users(context)
+            self._list_users(context.args[1:], context)
         elif cmd == "show" and len(context.args) >= 2:
             self._show_user(context.args[1], context)
         elif cmd == "set" and len(context.args) >= 2:
@@ -361,24 +396,101 @@ class UserCommand(BaseCommand):
                 "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]|register <user> <switch>]`"
             )
 
-    def _list_users(self, context: CommandContext) -> None:
-        """List all users"""
+    def _list_users(self, args: list, context: CommandContext) -> None:
+        """List all users with different output formats based on arguments"""
+        # Parse arguments for verbose and box flags
+        try:
+            parsed_args = self.list_parser.parse_args(args)
+        except Exception as e:
+            context.respond(f"Error parsing arguments: {str(e)}")
+            return
+
         users = self.database_service.get_all_users()
+
         if not users:
             context.respond("No users found.")
             return
 
-        user_list = []
-        for user in users:
-            admin_badge = " 👑" if user.is_admin else ""
-            switch_info = (
-                f" (switch: `{user.switch_id}`)"
-                if user.switch_id and user.switch_id.strip()
-                else ""
-            )
-            user_list.append(f"• <@{user.slack_user_id}>{admin_badge}{switch_info}")
+        if parsed_args.verbose:
+            self._list_users_verbose(users, context)
+        elif parsed_args.box:
+            self._list_users_box(users, context)
+        else:
+            self._list_users_concise(users, context)
 
-        context.respond("*All Users:*\n" + "\n".join(user_list))
+    def _list_users_verbose(self, users, context: CommandContext) -> None:
+        """List users with interactive blocks and buttons (original format but with switch info)"""
+        blocks = [create_header_block("👥 User Directory"), create_divider_block()]
+
+        for user in users:
+            # Determine switch status
+            switch_status = (
+                f"Switch: `{user.switch_id}`"
+                if user.switch_id and user.switch_id.strip()
+                else "No switch registered"
+            )
+
+            # Determine botherable status
+            botherable_status = (
+                "✅ Botherable" if user.botherable else "🚫 Not botherable"
+            )
+
+            # Admin badge
+            admin_badge = " 👑" if user.is_admin else ""
+
+            # Create user section text (includes switch information for admin view)
+            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{switch_status}\n{botherable_status}"
+
+            # Add bother button if user is botherable
+            accessory = None
+            if user.botherable:
+                accessory = create_button_accessory(
+                    "🔔 Bother", "bother_user", user.slack_user_id, "primary"
+                )
+
+            user_section = create_section_block(user_text, accessory=accessory)
+            blocks.append(user_section)
+            blocks.append(create_divider_block())
+
+        # Remove the last divider
+        if blocks and blocks[-1]["type"] == "divider":
+            blocks.pop()
+
+        # Create fallback text generator
+        def generate_fallback_text():
+            user_lines = []
+            for user in users:
+                switch_status = (
+                    f"Switch: `{user.switch_id}`"
+                    if user.switch_id and user.switch_id.strip()
+                    else "No switch registered"
+                )
+                botherable_status = (
+                    "✅ Botherable" if user.botherable else "🚫 Not botherable"
+                )
+                admin_badge = " 👑" if user.is_admin else ""
+                user_lines.append(
+                    f"• <@{user.slack_user_id}>{admin_badge} - {switch_status} - {botherable_status}"
+                )
+            return "*👥 User Directory*\n" + "\n".join(user_lines)
+
+        send_blocks_response(
+            blocks, context.respond, "👥 User Directory", generate_fallback_text
+        )
+
+    def _list_users_concise(self, users, context: CommandContext) -> None:
+        """List users in a concise plain-text table format (includes switch column)"""
+        # Use shared data processing logic
+        rows = process_admin_user_data(users)
+        table_output = format_admin_users_plain_table(rows)
+        context.respond(table_output)
+
+    def _list_users_box(self, users, context: CommandContext) -> None:
+        """List users in a box table format using Unicode box drawing characters (includes switch column)"""
+        # Use shared data processing logic
+        rows = process_admin_user_data(users)
+        table_output = format_admin_users_box_table(rows)
+        context.respond(table_output)
 
     def _show_user(self, target_user: str, context: CommandContext) -> None:
         """Show detailed user information"""

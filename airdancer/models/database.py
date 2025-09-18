@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from pony.orm import Database, Required, Optional, Set as PonySet, db_session, select
+from pony.orm import Database, Required, Optional, Set as PonySet, db_session
 
 from .entities import User, Switch, SwitchWithOwner, Owner
 

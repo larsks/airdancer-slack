@@ -3,7 +3,11 @@
 import logging
 from .base import BaseCommand, CommandContext
 from ..services.interfaces import DatabaseServiceInterface, MQTTServiceInterface
-from ..utils.parsers import create_bother_parser, create_user_set_parser
+from ..utils.parsers import (
+    create_bother_parser,
+    create_user_set_parser,
+    create_users_list_parser,
+)
 from ..utils.formatters import clean_switch_id
 from ..utils.user_resolvers import resolve_user_identifier
 from ..utils.slack_blocks import (
@@ -12,6 +16,11 @@ from ..utils.slack_blocks import (
     create_divider_block,
     create_section_block,
     create_button_accessory,
+)
+from ..utils.table_formatters import (
+    process_user_data,
+    format_users_plain_table,
+    format_users_box_table,
 )
 # Error handling will be done on a case-by-case basis
 
@@ -227,28 +236,39 @@ class ListUsersCommand(BaseCommand):
 
     def __init__(self, database_service: DatabaseServiceInterface):
         self.database_service = database_service
+        self.parser = create_users_list_parser()
 
     def can_execute(self, context: CommandContext) -> bool:
         """Anyone can list users"""
         return True
 
     def execute(self, context: CommandContext) -> None:
-        """List users with registered switches"""
+        """List users with different output formats based on arguments"""
+        # Parse arguments for verbose and box flags
+        try:
+            parsed_args = self.parser.parse_args(context.args)
+        except Exception as e:
+            context.respond(f"Error parsing arguments: {str(e)}")
+            return
+
         users = self.database_service.get_all_users()
 
         if not users:
             context.respond("No users found in the system.")
             return
 
+        if parsed_args.verbose:
+            self._list_users_verbose(users, context)
+        elif parsed_args.box:
+            self._list_users_box(users, context)
+        else:
+            self._list_users_concise(users, context)
+
+    def _list_users_verbose(self, users, context: CommandContext) -> None:
+        """List users with interactive blocks and buttons (original format)"""
         blocks = [create_header_block("👥 User Directory"), create_divider_block()]
 
         for user in users:
-            # Determine switch status
-            has_switch = bool(user.switch_id and user.switch_id.strip())
-            switch_status = (
-                f"Switch: `{user.switch_id}`" if has_switch else "No switch registered"
-            )
-
             # Determine botherable status
             botherable_status = (
                 "✅ Botherable" if user.botherable else "🚫 Not botherable"
@@ -257,12 +277,12 @@ class ListUsersCommand(BaseCommand):
             # Admin badge
             admin_badge = " 👑" if user.is_admin else ""
 
-            # Create user section text
-            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{switch_status}\n{botherable_status}"
+            # Create user section text (removed switch information)
+            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{botherable_status}"
 
-            # Add bother button if user is botherable and has a switch
+            # Add bother button if user is botherable (removed switch requirement)
             accessory = None
-            if has_switch and user.botherable:
+            if user.botherable:
                 accessory = create_button_accessory(
                     "🔔 Bother", "bother_user", user.slack_user_id, "primary"
                 )
@@ -279,24 +299,32 @@ class ListUsersCommand(BaseCommand):
         def generate_fallback_text():
             user_lines = []
             for user in users:
-                has_switch = bool(user.switch_id and user.switch_id.strip())
-                switch_status = (
-                    f"Switch: `{user.switch_id}`"
-                    if has_switch
-                    else "No switch registered"
-                )
                 botherable_status = (
                     "✅ Botherable" if user.botherable else "🚫 Not botherable"
                 )
                 admin_badge = " 👑" if user.is_admin else ""
                 user_lines.append(
-                    f"• <@{user.slack_user_id}>{admin_badge} - {switch_status} - {botherable_status}"
+                    f"• <@{user.slack_user_id}>{admin_badge} - {botherable_status}"
                 )
             return "*👥 User Directory*\n" + "\n".join(user_lines)
 
         send_blocks_response(
             blocks, context.respond, "👥 User Directory", generate_fallback_text
         )
+
+    def _list_users_concise(self, users, context: CommandContext) -> None:
+        """List users in a concise plain-text table format"""
+        # Use shared data processing logic
+        rows = process_user_data(users)
+        table_output = format_users_plain_table(rows)
+        context.respond(table_output)
+
+    def _list_users_box(self, users, context: CommandContext) -> None:
+        """List users in a box table format using Unicode box drawing characters"""
+        # Use shared data processing logic
+        rows = process_user_data(users)
+        table_output = format_users_box_table(rows)
+        context.respond(table_output)
 
 
 class ListGroupsCommand(BaseCommand):

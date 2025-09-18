@@ -177,7 +177,8 @@ class TestUserCommands:
         assert "Bothered 2 members" in response
 
     def test_list_users_command(self, mock_database_service, mock_context):
-        """Test list users command"""
+        """Test list users command with default format"""
+        mock_context.args = []
         mock_users = [
             User(
                 slack_user_id="U12345678",
@@ -208,42 +209,112 @@ class TestUserCommands:
 
         mock_context.respond.assert_called_once()
 
-        # Handle different call patterns from send_blocks_response
+        # The new default format uses plain text table
         call_args = mock_context.respond.call_args
-        if call_args.kwargs and "blocks" in call_args.kwargs:
-            # Called with blocks keyword argument
-            blocks = call_args.kwargs["blocks"]
-            # Convert blocks to text for testing
-            response_text = ""
-            for block in blocks:
-                if block.get("type") == "header":
-                    response_text += block["text"]["text"] + "\n"
-                elif block.get("type") == "section":
-                    response_text += block["text"]["text"] + "\n"
-        elif (
-            call_args.args
-            and isinstance(call_args.args[0], dict)
-            and "blocks" in call_args.args[0]
-        ):
-            # Called with dict containing blocks
-            response_dict = call_args.args[0]
-            blocks = response_dict["blocks"]
-            response_text = ""
-            for block in blocks:
-                if block.get("type") == "header":
-                    response_text += block["text"]["text"] + "\n"
-                elif block.get("type") == "section":
-                    response_text += block["text"]["text"] + "\n"
-        else:
-            # Called with text fallback
-            response_text = call_args.args[0]
+        response_text = call_args[0][0] if call_args[0] else str(call_args)
 
-        assert "User Directory" in response_text  # Updated header text
-        assert "U12345678" in response_text
-        assert "U87654321" in response_text
-        assert "👑" in response_text  # Admin badge
-        # Note: U11111111 might appear in blocks format, so we check for the switch status instead
-        assert "No switch registered" in response_text
+        # Check for plain text table format elements
+        assert "Username" in response_text  # Header
+        assert "Admin" in response_text  # Header
+        assert "Botherable" in response_text  # Header
+        assert "user1" in response_text
+        assert "user2" in response_text
+        assert "user3" in response_text
+        assert "yes" in response_text  # Admin status
+        assert "no" in response_text  # Admin status
+
+    def test_list_users_command_verbose(self, mock_database_service, mock_context):
+        """Test list users command with verbose flag"""
+        mock_context.args = ["--verbose"]
+        mock_users = [
+            User(
+                slack_user_id="U12345678",
+                username="user1",
+                switch_id="switch001",
+                is_admin=False,
+                created_at=datetime.now(),
+            ),
+            User(
+                slack_user_id="U87654321",
+                username="user2",
+                switch_id="switch002",
+                is_admin=True,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_database_service.get_all_users.return_value = mock_users
+
+        command = ListUsersCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called_once()
+
+        # The verbose format uses blocks or falls back to text
+        call_args = mock_context.respond.call_args
+
+        # It could be called with blocks keyword argument or with text fallback
+        if call_args.kwargs and "blocks" in call_args.kwargs:
+            # Block-based response was used
+            blocks = call_args.kwargs["blocks"]
+            assert any("User Directory" in str(block) for block in blocks)
+            assert any("U12345678" in str(block) for block in blocks)
+            assert any("👑" in str(block) for block in blocks)  # Admin badge
+        else:
+            # Text fallback was used
+            response = call_args[0][0] if call_args[0] else str(call_args)
+            assert "User Directory" in response
+            assert "U12345678" in response
+            assert "👑" in response  # Admin badge
+
+    def test_list_users_command_box(self, mock_database_service, mock_context):
+        """Test list users command with box flag"""
+        mock_context.args = ["--box"]
+        mock_users = [
+            User(
+                slack_user_id="U12345678",
+                username="user1",
+                switch_id="switch001",
+                is_admin=False,
+                created_at=datetime.now(),
+            ),
+            User(
+                slack_user_id="U87654321",
+                username="user2",
+                switch_id="switch002",
+                is_admin=True,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_database_service.get_all_users.return_value = mock_users
+
+        command = ListUsersCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called_once()
+
+        # The box implementation uses Unicode box drawing characters
+        call_args = mock_context.respond.call_args
+        response = call_args[0][0] if call_args[0] else str(call_args)
+
+        # Check for box drawing characters and content
+        assert "┌" in response  # Top-left corner
+        assert "┐" in response  # Top-right corner
+        assert "└" in response  # Bottom-left corner
+        assert "┘" in response  # Bottom-right corner
+        assert "├" in response  # Left tee
+        assert "┤" in response  # Right tee
+        assert "┬" in response  # Top tee
+        assert "┴" in response  # Bottom tee
+        assert "┼" in response  # Cross
+        assert "─" in response  # Horizontal line
+        assert "│" in response  # Vertical line
+
+        # Check for table content
+        assert "Username" in response  # Header
+        assert "user1" in response
+        assert "user2" in response
+        assert "yes" in response  # Admin status
+        assert "no" in response  # Admin status
 
     def test_list_groups_command(self, mock_database_service, mock_context):
         """Test list groups command"""
@@ -348,14 +419,18 @@ class TestAdminCommands:
         call_args = mock_context.respond.call_args
         response = call_args[0][0] if call_args[0] else str(call_args)
 
-        # Check for concise format elements
+        # Check for concise plain text format elements
         assert "Switch ID" in response  # Header
+        assert "Status" in response  # Header
+        assert "Username" in response  # Header
         assert "switch001" in response
         assert "switch002" in response
-        assert "🟢" in response  # Online status
-        assert "🔴" in response  # Offline status
+        assert "online" in response  # Status as text
+        assert "offline" in response  # Status as text
         assert "192.168.1.100" in response  # IP address
         assert "192.168.1.101" in response  # IP address
+        assert "testuser" in response  # Username
+        assert "unassigned" in response  # Unassigned switch
 
     def test_switch_list_command_verbose(
         self, mock_database_service, mock_mqtt_service, mock_context
@@ -391,6 +466,10 @@ class TestAdminCommands:
             blocks = call_args.kwargs["blocks"]
             assert any("Discovered Switches" in str(block) for block in blocks)
             assert any("switch001" in str(block) for block in blocks)
+            assert any(
+                "IP Address:" in str(block) for block in blocks
+            )  # IP address field
+            assert any("192.168.1.100" in str(block) for block in blocks)  # IP value
         else:
             # Text fallback was used
             response = call_args[0][0] if call_args[0] else str(call_args)
@@ -398,6 +477,68 @@ class TestAdminCommands:
             assert "switch001" in response
             assert "🟢" in response  # Online status
             assert "👑" in response  # Admin badge
+            assert "IP: 192.168.1.100" in response  # IP address in compact format
+
+    def test_switch_list_command_box(
+        self, mock_database_service, mock_mqtt_service, mock_context
+    ):
+        """Test switch list command with box flag"""
+        mock_context.args = ["list", "--box"]
+        mock_owner = Owner(
+            slack_user_id="U12345678", username="testuser", is_admin=True
+        )
+        mock_switches = [
+            SwitchWithOwner(
+                switch_id="switch001",
+                status="online",
+                power_state="ON",
+                last_seen=datetime.now(),
+                device_info='{"ip": "192.168.1.100"}',
+                owner=mock_owner,
+            ),
+            SwitchWithOwner(
+                switch_id="switch002",
+                status="offline",
+                power_state="OFF",
+                last_seen=datetime.now(),
+                device_info='{"ip": "192.168.1.101"}',
+                owner=None,
+            ),
+        ]
+        mock_database_service.get_all_switches_with_owners.return_value = mock_switches
+
+        command = SwitchCommand(mock_database_service, mock_mqtt_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called()
+
+        # The box implementation uses Unicode box drawing characters
+        call_args = mock_context.respond.call_args
+        response = call_args[0][0] if call_args[0] else str(call_args)
+
+        # Check for box drawing characters and content
+        assert "┌" in response  # Top-left corner
+        assert "┐" in response  # Top-right corner
+        assert "└" in response  # Bottom-left corner
+        assert "┘" in response  # Bottom-right corner
+        assert "├" in response  # Left tee
+        assert "┤" in response  # Right tee
+        assert "┬" in response  # Top tee
+        assert "┴" in response  # Bottom tee
+        assert "┼" in response  # Cross
+        assert "─" in response  # Horizontal line
+        assert "│" in response  # Vertical line
+
+        # Check for table content
+        assert "Switch ID" in response  # Header
+        assert "switch001" in response
+        assert "switch002" in response
+        assert "online" in response
+        assert "offline" in response
+        assert "192.168.1.100" in response
+        assert "192.168.1.101" in response
+        assert "testuser" in response
+        assert "unassigned" in response
 
     def test_switch_show_command(
         self, mock_database_service, mock_mqtt_service, mock_context
@@ -452,7 +593,7 @@ class TestAdminCommands:
             assert f"Successfully {action}" in response
 
     def test_user_list_command(self, mock_database_service, mock_context):
-        """Test user list admin command"""
+        """Test admin user list command with default format"""
         mock_context.args = ["list"]
         mock_users = [
             User(
@@ -477,10 +618,116 @@ class TestAdminCommands:
 
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
-        assert "All Users:" in response
-        assert "U12345678" in response
-        assert "U87654321" in response
-        assert "👑" in response  # Admin badge
+
+        # Check for new table format elements
+        assert "Username" in response  # Header
+        assert "Admin" in response  # Header
+        assert "Botherable" in response  # Header
+        assert "Switch" in response  # Header
+        assert "user1" in response
+        assert "user2" in response
+        assert "switch001" in response
+        assert "unassigned" in response  # For user2 with no switch
+        assert "yes" in response  # Admin status
+        assert "no" in response  # Admin status
+
+    def test_user_list_command_verbose(self, mock_database_service, mock_context):
+        """Test admin user list command with verbose flag"""
+        mock_context.args = ["list", "--verbose"]
+        mock_users = [
+            User(
+                slack_user_id="U12345678",
+                username="user1",
+                switch_id="switch001",
+                is_admin=False,
+                created_at=datetime.now(),
+            ),
+            User(
+                slack_user_id="U87654321",
+                username="user2",
+                switch_id=None,
+                is_admin=True,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_database_service.get_all_users.return_value = mock_users
+
+        command = UserCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called_once()
+
+        # The verbose format uses blocks or falls back to text
+        call_args = mock_context.respond.call_args
+
+        # It could be called with blocks keyword argument or with text fallback
+        if call_args.kwargs and "blocks" in call_args.kwargs:
+            # Block-based response was used
+            blocks = call_args.kwargs["blocks"]
+            assert any("User Directory" in str(block) for block in blocks)
+            assert any("U12345678" in str(block) for block in blocks)
+            assert any("👑" in str(block) for block in blocks)  # Admin badge
+            assert any("Switch:" in str(block) for block in blocks)  # Switch info
+        else:
+            # Text fallback was used
+            response = call_args[0][0] if call_args[0] else str(call_args)
+            assert "User Directory" in response
+            assert "U12345678" in response
+            assert "👑" in response  # Admin badge
+            assert "Switch:" in response  # Switch info
+
+    def test_user_list_command_box(self, mock_database_service, mock_context):
+        """Test admin user list command with box flag"""
+        mock_context.args = ["list", "--box"]
+        mock_users = [
+            User(
+                slack_user_id="U12345678",
+                username="user1",
+                switch_id="switch001",
+                is_admin=False,
+                created_at=datetime.now(),
+            ),
+            User(
+                slack_user_id="U87654321",
+                username="user2",
+                switch_id=None,
+                is_admin=True,
+                created_at=datetime.now(),
+            ),
+        ]
+        mock_database_service.get_all_users.return_value = mock_users
+
+        command = UserCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_context.respond.assert_called_once()
+
+        # The box implementation uses Unicode box drawing characters
+        call_args = mock_context.respond.call_args
+        response = call_args[0][0] if call_args[0] else str(call_args)
+
+        # Check for box drawing characters and content
+        assert "┌" in response  # Top-left corner
+        assert "┐" in response  # Top-right corner
+        assert "└" in response  # Bottom-left corner
+        assert "┘" in response  # Bottom-right corner
+        assert "├" in response  # Left tee
+        assert "┤" in response  # Right tee
+        assert "┬" in response  # Top tee
+        assert "┴" in response  # Bottom tee
+        assert "┼" in response  # Cross
+        assert "─" in response  # Horizontal line
+        assert "│" in response  # Vertical line
+
+        # Check for table content
+        assert "Username" in response  # Header
+        assert "Switch" in response  # Header (unique to admin version)
+        assert "user1" in response
+        assert "user2" in response
+        assert "switch001" in response
+        assert "unassigned" in response
+        assert "yes" in response  # Admin status
+        assert "no" in response  # Admin status
 
     def test_user_show_command(self, mock_database_service, mock_context):
         """Test user show command"""

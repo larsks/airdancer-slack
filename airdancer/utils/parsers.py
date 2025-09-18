@@ -95,5 +95,59 @@ def create_switch_list_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show detailed switch information in interactive format",
     )
+    parser.add_argument(
+        "--box",
+        "-b",
+        action="store_true",
+        help="Display table with box drawing characters",
+    )
+
+    return parser
+
+
+def create_users_list_parser() -> argparse.ArgumentParser:
+    """Create argument parser for users list command"""
+    parser = argparse.ArgumentParser(
+        prog="users",
+        description="List all registered users",
+        add_help=False,
+        exit_on_error=False,
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed user information in interactive format",
+    )
+    parser.add_argument(
+        "--box",
+        "-b",
+        action="store_true",
+        help="Display table with box drawing characters",
+    )
+
+    return parser
+
+
+def create_admin_user_list_parser() -> argparse.ArgumentParser:
+    """Create argument parser for admin user list command"""
+    parser = argparse.ArgumentParser(
+        prog="user list",
+        description="List all registered users (admin only)",
+        add_help=False,
+        exit_on_error=False,
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed user information in interactive format",
+    )
+    parser.add_argument(
+        "--box",
+        "-b",
+        action="store_true",
+        help="Display table with box drawing characters",
+    )
 
     return parser

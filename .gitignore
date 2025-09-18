@@ -4,3 +4,6 @@
 /airdancer.db
 /.env
 /manifests
+.envrc
+_site/
+node_modules/

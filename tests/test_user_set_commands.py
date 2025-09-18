@@ -183,7 +183,8 @@ class TestAdminUserSetCommand:
         """Test admin user set with user that doesn't exist"""
         mock_context.args = ["set", "nonexistent", "--admin"]
         mock_context.client.users_info.side_effect = Exception("User not found")
-        mock_database_service.get_all_users.return_value = []
+        mock_context.client.users_list.return_value = {"ok": True, "members": []}
+        mock_database_service.get_user_by_username.return_value = None
 
         command = UserCommand(mock_database_service)
         command.execute(mock_context)

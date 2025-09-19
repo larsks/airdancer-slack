@@ -161,7 +161,8 @@ def create_users_list_parser() -> SlackCommandParser:
         description="List all registered users",
     )
     parser.add_argument(
-        "--brief",
+        "--short",
+        "-s",
         action="store_true",
         help="Show simple plain-text table format",
     )
@@ -182,7 +183,8 @@ def create_admin_user_list_parser() -> SlackCommandParser:
         description="List all registered users (admin only)",
     )
     parser.add_argument(
-        "--brief",
+        "--short",
+        "-s",
         action="store_true",
         help="Show simple plain-text table format",
     )

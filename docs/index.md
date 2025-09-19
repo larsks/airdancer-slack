@@ -2,6 +2,18 @@
 title: "Airdancer: The wacky waving notification system"
 ---
 
+## Connecting to WiFi
+
+When you first plug in your Airdancer switch, it will create a WiFi network named `airdancer-<something>-<something>`. Connect to this network, then point your browser at <http://192.168.4.1>. This will allow you to enter credentials for your WiFi network:
+
+![Tasmota wifi configuration screen](/img/wifi-config.png)
+
+Once you have saved your credentials, the switch will restart and register with the Airdancer server.
+
+### Moving to another Wifi network
+
+If you need to move the switch to another WiFi network, hold down the physical button on the switch for at least 40 seconds. When the blue LED lights up, the device has successfully reset and will once again present the `airdancer-<something>-<something>` network. At this point you can enter credentials for the new network by following the earlier instructions.
+
 ## Slack commands
 
 ### The bother command
@@ -45,14 +57,3 @@ The following commands are available:
 
 You can start a private chat with the Airdancer app; in this case, you don't need to use the `/dancer` command; you can just send the commands as regular messages.
 
-## Connecting to WiFi
-
-When you first plug in your Airdancer switch, it will create a WiFi network named `airdancer-<something>-<something>`. Connect to this network, then point your browser at <http://192.168.4.1>. This will allow you to enter credentials for your WiFi network:
-
-![Tasmota wifi configuration screen](/img/wifi-config.png)
-
-Once you have saved your credentials, the switch will restart and register with the Airdancer server.
-
-### Moving to another Wifi network
-
-If you need to move the switch to another WiFi network, hold down the physical button on the switch for at least 40 seconds. When the blue LED lights up, the device has successfully reset and will once again present the `airdancer-<something>-<something>` network. At this point you can enter credentials for the new network by following the earlier instructions.

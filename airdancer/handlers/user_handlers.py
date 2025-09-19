@@ -42,6 +42,7 @@ class UserCommandHandler:
         self.mqtt_service = mqtt_service
         self.commands: dict[str, BaseCommand] = {
             "register": RegisterCommand(database_service),
+            "unregister": UnregisterCommand(database_service),
             "bother": BotherCommand(database_service, mqtt_service),
             "users": ListUsersCommand(database_service),
             "groups": ListGroupsCommand(database_service),
@@ -99,6 +100,39 @@ class RegisterCommand(BaseCommand):
             from ..error_handler import ErrorHandler
 
             ErrorHandler.handle_command_error(e, context)
+
+
+class UnregisterCommand(BaseCommand):
+    """Handle user unregistration of their own switch"""
+
+    def __init__(self, database_service: DatabaseServiceInterface):
+        self.database_service = database_service
+
+    def can_execute(self, context: CommandContext) -> bool:
+        """Check if unregister command can be executed"""
+        return True
+
+    def execute(self, context: CommandContext) -> None:
+        """Execute unregister command"""
+        if context.args:
+            context.respond(
+                "The `unregister` command takes no arguments. Use `/dancer unregister` to remove your switch registration."
+            )
+            return
+
+        # Check if user has a registered switch
+        user = self.database_service.get_user(context.user_id)
+        if not user or not user.switch_id or not user.switch_id.strip():
+            context.respond("❌ You don't have a switch registered.")
+            return
+
+        # Unregister the user's switch
+        if self.database_service.unregister_user(context.user_id):
+            context.respond("✅ Successfully removed your switch registration.")
+        else:
+            context.respond(
+                "❌ Failed to remove your switch registration. Please try again."
+            )
 
 
 class BotherCommand(BaseCommand):
@@ -273,7 +307,7 @@ class ListUsersCommand(BaseCommand):
             context.respond("No users found in the system.")
             return
 
-        if parsed_args.brief:
+        if parsed_args.short:
             self._list_users_concise(users, context)
         elif parsed_args.box:
             self._list_users_box(users, context)

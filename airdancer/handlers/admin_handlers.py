@@ -41,7 +41,6 @@ class AdminCommandHandler:
         self.database_service = database_service
         self.mqtt_service = mqtt_service
         self.commands: dict[str, BaseCommand] = {
-            "unregister": UnregisterCommand(database_service),
             "switch": SwitchCommand(database_service, mqtt_service),
             "user": UserCommand(database_service),
             "group": GroupCommand(database_service),
@@ -57,38 +56,6 @@ class AdminCommandHandler:
                 context.respond("Only administrators can use this command.")
         else:
             context.respond(f"Unknown admin command: {command}")
-
-
-class UnregisterCommand(BaseCommand):
-    """Handle user unregistration (admin only)"""
-
-    def __init__(self, database_service: DatabaseServiceInterface):
-        self.database_service = database_service
-        self.parser = create_unregister_parser()
-
-    def can_execute(self, context: CommandContext) -> bool:
-        """Only admins can unregister users"""
-        return self.database_service.is_admin(context.user_id)
-
-    def execute(self, context: CommandContext) -> None:
-        """Execute unregister command"""
-        try:
-            parsed_args = self.parser.parse_args(context.args)
-        except HelpRequestedException as e:
-            context.respond(e.help_text)
-            return
-        except Exception as e:
-            error_msg = str(e)
-            context.respond(f"Error parsing arguments: {error_msg}")
-            return
-
-        # This is simplified - in real implementation, you'd resolve user identifier
-        target_user = parsed_args.user
-
-        if self.database_service.unregister_user(target_user):
-            context.respond("Successfully unregistered user.")
-        else:
-            context.respond("Failed to unregister user or user not found.")
 
 
 class SwitchCommand(BaseCommand):
@@ -403,9 +370,11 @@ class UserCommand(BaseCommand):
             self._set_user(context.args[1:], context)
         elif cmd == "register" and len(context.args) >= 3:
             self._register_user(context.args[1], context.args[2], context)
+        elif cmd == "unregister" and len(context.args) >= 2:
+            self._unregister_user(context.args[1], context)
         else:
             context.respond(
-                "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]|register <user> <switch>]`"
+                "Usage: `user [list|show <user>|set <user> [--admin|--no-admin] [--bother|--no-bother]|register <user> <switch>|unregister <user>]`"
             )
 
     def _list_users(self, args: list, context: CommandContext) -> None:
@@ -426,7 +395,7 @@ class UserCommand(BaseCommand):
             context.respond("No users found.")
             return
 
-        if parsed_args.brief:
+        if parsed_args.short:
             self._list_users_concise(users, context)
         elif parsed_args.box:
             self._list_users_box(users, context)
@@ -618,6 +587,30 @@ class UserCommand(BaseCommand):
             from ..error_handler import ErrorHandler
 
             ErrorHandler.handle_command_error(e, context)
+
+    def _unregister_user(self, user_str: str, context: CommandContext) -> None:
+        """Unregister a switch from a specific user (admin only)"""
+        try:
+            parser = create_unregister_parser()
+            parser.parse_args([user_str])
+        except HelpRequestedException as e:
+            context.respond(e.help_text)
+            return
+        except Exception as e:
+            error_msg = str(e)
+            context.respond(f"Error parsing arguments: {error_msg}")
+            return
+
+        # Resolve the user identifier
+        target_user_id = self._resolve_user_identifier(user_str, context)
+        if not target_user_id:
+            context.respond(f"Could not find user {user_str}")
+            return
+
+        if self.database_service.unregister_user(target_user_id):
+            context.respond(f"Successfully unregistered <@{target_user_id}>.")
+        else:
+            context.respond("Failed to unregister user or user not found.")
 
     def _resolve_user_identifier(
         self, user_str: str, context: CommandContext

@@ -7,12 +7,12 @@ from datetime import datetime
 from airdancer.handlers.base import CommandContext
 from airdancer.handlers.user_handlers import (
     RegisterCommand,
+    UnregisterCommand,
     BotherCommand,
     ListUsersCommand,
     ListGroupsCommand,
 )
 from airdancer.handlers.admin_handlers import (
-    UnregisterCommand,
     SwitchCommand,
     UserCommand,
     GroupCommand,
@@ -227,8 +227,8 @@ class TestUserCommands:
             assert "👑" in response  # Admin badge
 
     def test_list_users_command_brief(self, mock_database_service, mock_context):
-        """Test list users command with brief flag"""
-        mock_context.args = ["--brief"]
+        """Test list users command with short flag"""
+        mock_context.args = ["--short"]
         mock_users = [
             User(
                 slack_user_id="U12345678",
@@ -362,24 +362,53 @@ class TestAdminCommands:
         return context
 
     def test_unregister_command_success(self, mock_database_service, mock_context):
-        """Test successful user unregistration"""
-        mock_context.args = ["U87654321"]
+        """Test successful user unregistration of their own switch"""
+        mock_context.args = []
+        mock_context.user_id = "U12345678"
+
+        # Mock user with registered switch
+        mock_user = Mock()
+        mock_user.switch_id = "tasmota_12345"
+        mock_database_service.get_user.return_value = mock_user
         mock_database_service.unregister_user.return_value = True
 
         command = UnregisterCommand(mock_database_service)
         command.execute(mock_context)
 
-        mock_database_service.unregister_user.assert_called_once_with("U87654321")
+        mock_database_service.unregister_user.assert_called_once_with("U12345678")
         mock_context.respond.assert_called_once()
         response = mock_context.respond.call_args[0][0]
-        assert "Successfully unregistered" in response
+        assert "Successfully removed your switch registration" in response
 
-    def test_unregister_command_not_admin(self, mock_database_service, mock_context):
-        """Test unregister command by non-admin user"""
-        mock_database_service.is_admin.return_value = False
+    def test_unregister_command_no_switch(self, mock_database_service, mock_context):
+        """Test unregister command when user has no registered switch"""
+        mock_context.args = []
+        mock_context.user_id = "U12345678"
+
+        # Mock user with no registered switch
+        mock_user = Mock()
+        mock_user.switch_id = None
+        mock_database_service.get_user.return_value = mock_user
 
         command = UnregisterCommand(mock_database_service)
-        assert not command.can_execute(mock_context)
+        command.execute(mock_context)
+
+        mock_database_service.unregister_user.assert_not_called()
+        mock_context.respond.assert_called_once()
+        response = mock_context.respond.call_args[0][0]
+        assert "You don't have a switch registered" in response
+
+    def test_unregister_command_with_args(self, mock_database_service, mock_context):
+        """Test unregister command when arguments are provided (should reject)"""
+        mock_context.args = ["some_arg"]
+
+        command = UnregisterCommand(mock_database_service)
+        command.execute(mock_context)
+
+        mock_database_service.unregister_user.assert_not_called()
+        mock_context.respond.assert_called_once()
+        response = mock_context.respond.call_args[0][0]
+        assert "takes no arguments" in response
 
     def test_switch_list_command(
         self, mock_database_service, mock_mqtt_service, mock_context
@@ -636,8 +665,8 @@ class TestAdminCommands:
             assert "👑" in response  # Admin badge
 
     def test_user_list_command_brief(self, mock_database_service, mock_context):
-        """Test admin user list command with brief flag"""
-        mock_context.args = ["list", "--brief"]
+        """Test admin user list command with short flag"""
+        mock_context.args = ["list", "--short"]
         mock_users = [
             User(
                 slack_user_id="U12345678",
@@ -961,7 +990,6 @@ class TestCommandValidation:
         mock_database_service.is_admin.return_value = False
 
         admin_commands = [
-            UnregisterCommand(mock_database_service),
             SwitchCommand(mock_database_service, mock_mqtt_service),
             UserCommand(mock_database_service),
             GroupCommand(mock_database_service),

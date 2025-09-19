@@ -35,10 +35,11 @@ class CommandRouter:
             "users": lambda ctx: self.user_handler.handle_command("users", ctx),
             "groups": lambda ctx: self.user_handler.handle_command("groups", ctx),
             "set": lambda ctx: self.user_handler.handle_command("set", ctx),
-            # Admin commands
-            "unregister": lambda ctx: self.admin_handler.handle_command(
+            # User commands with admin variant
+            "unregister": lambda ctx: self.user_handler.handle_command(
                 "unregister", ctx
             ),
+            # Admin commands
             "switch": lambda ctx: self.admin_handler.handle_command("switch", ctx),
             "user": lambda ctx: self.admin_handler.handle_command("user", ctx),
             "group": lambda ctx: self.admin_handler.handle_command("group", ctx),
@@ -85,6 +86,7 @@ class CommandRouter:
 
 *User Commands:*
 • `register <switch_id>` - Register a switch to your account
+• `unregister` - Remove your switch registration
 • `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch
 • `set --bother|--no-bother` - Enable/disable bother notifications
 • `users [--box] [--brief]` - List all registered users
@@ -97,7 +99,6 @@ For more information, visit https://airdancer.oddbit.com
             help_text += """
 
 *Admin Commands:*
-• `unregister <user>` - Remove a user's switch registration
 • `switch list` - List all switches and their status
 • `switch show <switch_id>` - Show details for a specific switch
 • `switch on <switch_id>` - Turn on a switch
@@ -107,6 +108,7 @@ For more information, visit https://airdancer.oddbit.com
 • `user show <user>` - Show user details
 • `user set <user> [--admin|--no-admin] [--bother|--no-bother]` - Configure user settings
 • `user register <user> <switch_id>` - Register a switch to a specific user
+• `user unregister <user>` - Remove a user's switch registration
 • `group list` - List all groups with member counts
 • `group create <name>` - Create a new group
 • `group destroy <name>` - Delete a group
@@ -134,5 +136,5 @@ For more information, visit https://airdancer.oddbit.com
 
     def is_admin_command(self, cmd: str) -> bool:
         """Check if a command requires admin privileges"""
-        admin_commands = {"unregister", "switch", "user", "group"}
+        admin_commands = {"switch", "user", "group"}
         return cmd.lower() in admin_commands

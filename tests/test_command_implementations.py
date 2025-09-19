@@ -911,8 +911,8 @@ class TestAdminCommands:
         assert "Cannot destroy the special" in response
 
     def test_group_add_users_command(self, mock_database_service, mock_context):
-        """Test group add users command"""
-        mock_context.args = ["add", "testgroup", "<@U12345678>", "<@U87654321>"]
+        """Test group adduser command"""
+        mock_context.args = ["adduser", "testgroup", "<@U12345678>", "<@U87654321>"]
         mock_database_service.add_user_to_group.return_value = True
         mock_database_service.get_all_users.return_value = [
             User(
@@ -936,8 +936,8 @@ class TestAdminCommands:
         assert "Added 2 user(s)" in response
 
     def test_group_remove_users_command(self, mock_database_service, mock_context):
-        """Test group remove users command"""
-        mock_context.args = ["remove", "testgroup", "<@U12345678>"]
+        """Test group deluser command"""
+        mock_context.args = ["deluser", "testgroup", "<@U12345678>"]
         mock_database_service.remove_user_from_group.return_value = True
         mock_database_service.get_all_users.return_value = [
             User(slack_user_id="U12345678", username="user1", created_at=datetime.now())

@@ -112,8 +112,8 @@ For more information, visit https://airdancer.oddbit.com
 • `group list` - List all groups with member counts
 • `group create <name>` - Create a new group
 • `group destroy <name>` - Delete a group
-• `group add <name> <user1> [user2...]` - Add users to a group
-• `group remove <name> <user1> [user2...]` - Remove users from a group"""
+• `group adduser <name> <user1> [user2...]` - Add users to a group
+• `group deluser <name> <user1> [user2...]` - Remove users from a group"""
 
         help_text += """
 

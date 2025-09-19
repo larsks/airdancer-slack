@@ -56,8 +56,8 @@ users
 - `group show <name>` - Show group members
 - `group create <name>` - Create a new group
 - `group destroy <name>` - Delete a group
-- `group add <name> <user1> [user2...]` - Add users to a group
-- `group remove <name> <user1> [user2...]` - Remove users from a group
+- `group adduser <name> <user1> [user2...]` - Add users to a group
+- `group deluser <name> <user1> [user2...]` - Remove users from a group
 
 ## Examples
 
@@ -66,5 +66,5 @@ users
 /dancer bother @username
 /dancer bother --duration 30 mygroup
 /dancer switch toggle tasmota_12345
-/dancer group add engineering @alice @bob
+/dancer group adduser engineering @alice @bob
 ```

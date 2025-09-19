@@ -632,7 +632,9 @@ class GroupCommand(BaseCommand):
     def execute(self, context: CommandContext) -> None:
         """Execute group command"""
         if not context.args:
-            context.respond("Usage: `group [list|show|create|destroy|add|remove] ...`")
+            context.respond(
+                "Usage: `group [list|show|create|destroy|adduser|deluser] ...`"
+            )
             return
 
         cmd = context.args[0].lower()
@@ -645,13 +647,13 @@ class GroupCommand(BaseCommand):
             self._create_group(context.args[1], context)
         elif cmd == "destroy" and len(context.args) >= 2:
             self._destroy_group(context.args[1], context)
-        elif cmd == "add" and len(context.args) >= 3:
+        elif cmd == "adduser" and len(context.args) >= 3:
             self._add_users_to_group(context.args[1], context.args[2:], context)
-        elif cmd == "remove" and len(context.args) >= 3:
+        elif cmd == "deluser" and len(context.args) >= 3:
             self._remove_users_from_group(context.args[1], context.args[2:], context)
         else:
             context.respond(
-                "Usage: `group [list|show <name>|create <name>|destroy <name>|add <name> <user> ...|remove <name> <user> ...]`"
+                "Usage: `group [list|show <name>|create <name>|destroy <name>|adduser <name> <user> ...|deluser <name> <user> ...]`"
             )
 
     def _list_groups(self, context: CommandContext) -> None:

@@ -49,7 +49,7 @@ You can start a private chat with the Airdancer app; in this case, you don't nee
 
 When you first plug in your Airdancer switch, it will create a WiFi network named `airdancer-<something>-<something>`. Connect to this network, then point your browser at <http://192.168.4.1>. This will allow you to enter credentials for your WiFi network:
 
-<!-- place image here -->
+![Tasmota wifi configuration screen](/img/wifi-config.png)
 
 Once you have saved your credentials, the switch will restart and register with the Airdancer server.
 

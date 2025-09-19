@@ -40,7 +40,7 @@ The following commands are available:
 - `register <switch_id>` - Register a switch to your account. If you have a [Tasmota] switch that has not been registered to someone else, you can register it to yourself. The `<switch_id>` value is the `topic` value shown in the MQTT configuration screen.
 - `bother [--duration <seconds>] <user_or_group>` - Activate someone's switch; this is the same as the `/bother` command.
 - `set --bother|--no-bother` - Enable/disable bother notifications.
-- `users [--box] [--brief]` - List all users. Use `--box` to get plain-text table, and `--brief` to get even simpler plain-text output.
+- `users [--box] [--short]` - List all users. Use `--box` to get plain-text table, and `--short` to get even simpler plain-text output.
 - `groups` - List all groups.
 
 You can start a private chat with the Airdancer app; in this case, you don't need to use the `/dancer` command; you can just send the commands as regular messages.

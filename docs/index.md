@@ -58,3 +58,6 @@ The following commands are available:
 
 You can start a private chat with the Airdancer app; in this case, you don't need to use the `/dancer` command; you can just send the commands as regular messages.
 
+## For more information
+
+You can find more information, project source code, etc, in our GitHub repository, <https://github.com/larsks/airdancer-slack>.

@@ -24,6 +24,7 @@ class UserTableRow(NamedTuple):
     username: str
     admin: str
     botherable: str
+    switch_status: str
 
 
 class AdminUserTableRow(NamedTuple):
@@ -33,6 +34,7 @@ class AdminUserTableRow(NamedTuple):
     admin: str
     botherable: str
     switch: str
+    switch_status: str
 
 
 def process_switch_data(switches: list[SwitchWithOwner]) -> list[SwitchTableRow]:
@@ -81,11 +83,17 @@ def process_switch_data(switches: list[SwitchWithOwner]) -> list[SwitchTableRow]
     return rows
 
 
-def process_user_data(users: list[User]) -> list[UserTableRow]:
+def process_user_data(
+    users: list[User], switches: dict[str, str] | None = None
+) -> list[UserTableRow]:
     """Process user data into table rows with shared formatting logic"""
     rows = []
 
     for user in users:
+        # Skip users without registered switches
+        if not user.switch_id or not user.switch_id.strip():
+            continue
+
         # Get username from slack user ID (remove @ prefix if present)
         username = user.username
 
@@ -95,22 +103,36 @@ def process_user_data(users: list[User]) -> list[UserTableRow]:
         # Botherable status as plain text
         botherable_text = "yes" if user.botherable else "no"
 
+        # Switch status
+        switch_status = "offline"
+        if switches and user.switch_id in switches:
+            switch_status = (
+                "online" if switches[user.switch_id] == "online" else "offline"
+            )
+
         rows.append(
             UserTableRow(
                 username=username,
                 admin=admin_text,
                 botherable=botherable_text,
+                switch_status=switch_status,
             )
         )
 
     return rows
 
 
-def process_admin_user_data(users: list[User]) -> list[AdminUserTableRow]:
+def process_admin_user_data(
+    users: list[User], switches: dict[str, str] | None = None
+) -> list[AdminUserTableRow]:
     """Process user data into admin table rows with shared formatting logic (includes switch)"""
     rows = []
 
     for user in users:
+        # Skip users without registered switches
+        if not user.switch_id or not user.switch_id.strip():
+            continue
+
         # Get username
         username = user.username
 
@@ -121,11 +143,14 @@ def process_admin_user_data(users: list[User]) -> list[AdminUserTableRow]:
         botherable_text = "yes" if user.botherable else "no"
 
         # Switch name
-        switch_text = (
-            user.switch_id
-            if user.switch_id and user.switch_id.strip()
-            else "unassigned"
-        )
+        switch_text = user.switch_id
+
+        # Switch status
+        switch_status = "offline"
+        if switches and user.switch_id in switches:
+            switch_status = (
+                "online" if switches[user.switch_id] == "online" else "offline"
+            )
 
         rows.append(
             AdminUserTableRow(
@@ -133,6 +158,7 @@ def process_admin_user_data(users: list[User]) -> list[AdminUserTableRow]:
                 admin=admin_text,
                 botherable=botherable_text,
                 switch=switch_text,
+                switch_status=switch_status,
             )
         )
 
@@ -166,11 +192,14 @@ def format_users_plain_table(rows: list[UserTableRow]) -> str:
     user_lines = []
     for row in rows:
         # Format the line with consistent column widths
-        user_lines.append(f"{row.username:<20} {row.admin:<5} {row.botherable}")
+        status_emoji = "🟢" if row.switch_status == "online" else "🔴"
+        user_lines.append(
+            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {status_emoji} {row.switch_status}"
+        )
 
     # Create header and table
-    header = f"{'Username':<20} {'Admin':<5} Botherable"
-    separator = "-" * 40
+    header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} Switch Status"
+    separator = "-" * 60
 
     return f"```\n{header}\n{separator}\n" + "\n".join(user_lines) + "\n```"
 
@@ -183,13 +212,14 @@ def format_admin_users_plain_table(rows: list[AdminUserTableRow]) -> str:
     user_lines = []
     for row in rows:
         # Format the line with consistent column widths
+        status_emoji = "🟢" if row.switch_status == "online" else "🔴"
         user_lines.append(
-            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {row.switch}"
+            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {row.switch:<15} {status_emoji} {row.switch_status}"
         )
 
     # Create header and table
-    header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} Switch"
-    separator = "-" * 60
+    header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} {'Switch':<15} Status"
+    separator = "-" * 75
 
     return f"```\n{header}\n{separator}\n" + "\n".join(user_lines) + "\n```"
 
@@ -295,8 +325,16 @@ def format_users_box_table(rows: list[UserTableRow]) -> str:
     if not rows:
         return ""
 
-    headers = ["Username", "Admin", "Botherable"]
-    rows_data = [[row.username, row.admin, row.botherable] for row in rows]
+    headers = ["Username", "Admin", "Botherable", "Switch Status"]
+    rows_data = [
+        [
+            row.username,
+            row.admin,
+            row.botherable,
+            f"{'🟢' if row.switch_status == 'online' else '🔴'} {row.switch_status}",
+        ]
+        for row in rows
+    ]
     return _create_box_table(headers, rows_data)
 
 
@@ -305,6 +343,15 @@ def format_admin_users_box_table(rows: list[AdminUserTableRow]) -> str:
     if not rows:
         return ""
 
-    headers = ["Username", "Admin", "Botherable", "Switch"]
-    rows_data = [[row.username, row.admin, row.botherable, row.switch] for row in rows]
+    headers = ["Username", "Admin", "Botherable", "Switch", "Status"]
+    rows_data = [
+        [
+            row.username,
+            row.admin,
+            row.botherable,
+            row.switch,
+            f"{'🟢' if row.switch_status == 'online' else '🔴'} {row.switch_status}",
+        ]
+        for row in rows
+    ]
     return _create_box_table(headers, rows_data)

@@ -391,28 +391,37 @@ class UserCommand(BaseCommand):
 
         users = self.database_service.get_all_users()
 
-        if not users:
-            context.respond("No users found.")
+        # Filter for users with registered switches
+        users_with_switches = [
+            user for user in users if user.switch_id and user.switch_id.strip()
+        ]
+
+        if not users_with_switches:
+            context.respond("No users with registered switches found.")
             return
 
-        if parsed_args.short:
-            self._list_users_concise(users, context)
-        elif parsed_args.box:
-            self._list_users_box(users, context)
-        else:
-            self._list_users_verbose(users, context)
+        # Get switch status information
+        all_switches = self.database_service.get_all_switches()
+        switch_status_map = {switch.switch_id: switch.status for switch in all_switches}
 
-    def _list_users_verbose(self, users, context: CommandContext) -> None:
+        if parsed_args.short:
+            self._list_users_concise(users_with_switches, switch_status_map, context)
+        elif parsed_args.box:
+            self._list_users_box(users_with_switches, switch_status_map, context)
+        else:
+            self._list_users_verbose(users_with_switches, switch_status_map, context)
+
+    def _list_users_verbose(
+        self, users, switch_status_map, context: CommandContext
+    ) -> None:
         """List users with interactive blocks and buttons (original format but with switch info)"""
         blocks = [create_header_block("👥 User Directory"), create_divider_block()]
 
         for user in users:
-            # Determine switch status
-            switch_status = (
-                f"Switch: `{user.switch_id}`"
-                if user.switch_id and user.switch_id.strip()
-                else "No switch registered"
-            )
+            # Determine switch status with online/offline information
+            status = switch_status_map.get(user.switch_id, "offline")
+            status_emoji = "🟢" if status == "online" else "🔴"
+            switch_status = f"Switch: `{user.switch_id}` {status_emoji} {status}"
 
             # Determine botherable status
             botherable_status = (
@@ -428,9 +437,15 @@ class UserCommand(BaseCommand):
             # Add bother button if user is botherable
             accessory = None
             if user.botherable:
-                accessory = create_button_accessory(
-                    "🔔 Bother", "bother_user", user.slack_user_id, "primary"
-                )
+                if status == "online":
+                    accessory = create_button_accessory(
+                        "🔔 Bother", "bother_user", user.slack_user_id, "primary"
+                    )
+                else:
+                    # Show disabled button when switch is offline
+                    accessory = create_button_accessory(
+                        "🔴 Offline", "disabled", "disabled", "danger"
+                    )
 
             user_section = create_section_block(user_text, accessory=accessory)
             blocks.append(user_section)
@@ -444,11 +459,9 @@ class UserCommand(BaseCommand):
         def generate_fallback_text():
             user_lines = []
             for user in users:
-                switch_status = (
-                    f"Switch: `{user.switch_id}`"
-                    if user.switch_id and user.switch_id.strip()
-                    else "No switch registered"
-                )
+                status = switch_status_map.get(user.switch_id, "offline")
+                status_emoji = "🟢" if status == "online" else "🔴"
+                switch_status = f"Switch: `{user.switch_id}` {status_emoji} {status}"
                 botherable_status = (
                     "✅ Botherable" if user.botherable else "🚫 Not botherable"
                 )
@@ -462,17 +475,21 @@ class UserCommand(BaseCommand):
             blocks, context.respond, "👥 User Directory", generate_fallback_text
         )
 
-    def _list_users_concise(self, users, context: CommandContext) -> None:
+    def _list_users_concise(
+        self, users, switch_status_map, context: CommandContext
+    ) -> None:
         """List users in a concise plain-text table format (includes switch column)"""
         # Use shared data processing logic
-        rows = process_admin_user_data(users)
+        rows = process_admin_user_data(users, switch_status_map)
         table_output = format_admin_users_plain_table(rows)
         context.respond(table_output)
 
-    def _list_users_box(self, users, context: CommandContext) -> None:
+    def _list_users_box(
+        self, users, switch_status_map, context: CommandContext
+    ) -> None:
         """List users in a box table format using Unicode box drawing characters (includes switch column)"""
         # Use shared data processing logic
-        rows = process_admin_user_data(users)
+        rows = process_admin_user_data(users, switch_status_map)
         table_output = format_admin_users_box_table(rows)
         context.respond(table_output)
 

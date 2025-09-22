@@ -191,15 +191,14 @@ def format_users_plain_table(rows: list[UserTableRow]) -> str:
 
     user_lines = []
     for row in rows:
-        # Format the line with consistent column widths
-        status_emoji = "🟢" if row.switch_status == "online" else "🔴"
+        # Format the line with consistent column widths (no emojis in plain text)
         user_lines.append(
-            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {status_emoji} {row.switch_status}"
+            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {row.switch_status}"
         )
 
     # Create header and table
-    header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} Switch Status"
-    separator = "-" * 60
+    header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} Status"
+    separator = "-" * 50
 
     return f"```\n{header}\n{separator}\n" + "\n".join(user_lines) + "\n```"
 
@@ -211,15 +210,14 @@ def format_admin_users_plain_table(rows: list[AdminUserTableRow]) -> str:
 
     user_lines = []
     for row in rows:
-        # Format the line with consistent column widths
-        status_emoji = "🟢" if row.switch_status == "online" else "🔴"
+        # Format the line with consistent column widths (no emojis in plain text)
         user_lines.append(
-            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {row.switch:<15} {status_emoji} {row.switch_status}"
+            f"{row.username:<20} {row.admin:<5} {row.botherable:<10} {row.switch:<15} {row.switch_status}"
         )
 
     # Create header and table
     header = f"{'Username':<20} {'Admin':<5} {'Botherable':<10} {'Switch':<15} Status"
-    separator = "-" * 75
+    separator = "-" * 70
 
     return f"```\n{header}\n{separator}\n" + "\n".join(user_lines) + "\n```"
 
@@ -325,13 +323,13 @@ def format_users_box_table(rows: list[UserTableRow]) -> str:
     if not rows:
         return ""
 
-    headers = ["Username", "Admin", "Botherable", "Switch Status"]
+    headers = ["Username", "Admin", "Botherable", "Status"]
     rows_data = [
         [
             row.username,
             row.admin,
             row.botherable,
-            f"{'🟢' if row.switch_status == 'online' else '🔴'} {row.switch_status}",
+            row.switch_status,
         ]
         for row in rows
     ]
@@ -350,7 +348,7 @@ def format_admin_users_box_table(rows: list[AdminUserTableRow]) -> str:
             row.admin,
             row.botherable,
             row.switch,
-            f"{'🟢' if row.switch_status == 'online' else '🔴'} {row.switch_status}",
+            row.switch_status,
         ]
         for row in rows
     ]

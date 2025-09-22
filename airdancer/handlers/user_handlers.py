@@ -338,13 +338,11 @@ class ListUsersCommand(BaseCommand):
             # Admin badge
             admin_badge = " 👑" if user.is_admin else ""
 
-            # Switch status
+            # Get switch status for button logic
             switch_status = switch_status_map.get(user.switch_id, "offline")
-            status_emoji = "🟢" if switch_status == "online" else "🔴"
-            switch_info = f"Switch: {status_emoji} {switch_status}"
 
-            # Create user section text (includes switch status)
-            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{switch_info}\n{botherable_status}"
+            # Create user section text (switch status now shown via button)
+            user_text = f"*<@{user.slack_user_id}>*{admin_badge}\n{botherable_status}"
 
             # Add bother button if user is botherable
             accessory = None
@@ -375,10 +373,8 @@ class ListUsersCommand(BaseCommand):
                     "✅ Botherable" if user.botherable else "🚫 Not botherable"
                 )
                 admin_badge = " 👑" if user.is_admin else ""
-                switch_status = switch_status_map.get(user.switch_id, "offline")
-                status_emoji = "🟢" if switch_status == "online" else "🔴"
                 user_lines.append(
-                    f"• <@{user.slack_user_id}>{admin_badge} - {status_emoji} {switch_status} - {botherable_status}"
+                    f"• <@{user.slack_user_id}>{admin_badge} - {botherable_status}"
                 )
             return "*👥 User Directory*\n" + "\n".join(user_lines)
 

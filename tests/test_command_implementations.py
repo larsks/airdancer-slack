@@ -720,7 +720,9 @@ class TestAdminCommands:
             assert any("User Directory" in str(block) for block in blocks)
             assert any("U12345678" in str(block) for block in blocks)
             # Note: user2 (admin) has no switch so won't appear in filtered results
-            assert any("Switch:" in str(block) for block in blocks)  # Switch info
+            assert any(
+                "Switch:" in str(block) for block in blocks
+            )  # Switch ID info (admin view)
         else:
             # Text fallback was used
             response = call_args[0][0] if call_args[0] else str(call_args)

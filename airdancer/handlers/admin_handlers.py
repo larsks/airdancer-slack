@@ -418,10 +418,9 @@ class UserCommand(BaseCommand):
         blocks = [create_header_block("👥 User Directory"), create_divider_block()]
 
         for user in users:
-            # Determine switch status with online/offline information
+            # Get switch status for button logic and show switch ID (status shown via button)
             status = switch_status_map.get(user.switch_id, "offline")
-            status_emoji = "🟢" if status == "online" else "🔴"
-            switch_status = f"Switch: `{user.switch_id}` {status_emoji} {status}"
+            switch_status = f"Switch: `{user.switch_id}`"
 
             # Determine botherable status
             botherable_status = (
@@ -459,9 +458,7 @@ class UserCommand(BaseCommand):
         def generate_fallback_text():
             user_lines = []
             for user in users:
-                status = switch_status_map.get(user.switch_id, "offline")
-                status_emoji = "🟢" if status == "online" else "🔴"
-                switch_status = f"Switch: `{user.switch_id}` {status_emoji} {status}"
+                switch_status = f"Switch: `{user.switch_id}`"
                 botherable_status = (
                     "✅ Botherable" if user.botherable else "🚫 Not botherable"
                 )

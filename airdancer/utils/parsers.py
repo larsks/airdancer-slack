@@ -172,6 +172,21 @@ def create_users_list_parser() -> SlackCommandParser:
         action="store_true",
         help="Display table with box drawing characters",
     )
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument(
+        "--online",
+        action="store_const",
+        dest="filter",
+        const="online",
+        help="List only users with online devices",
+    )
+    g.add_argument(
+        "--offline",
+        action="store_const",
+        dest="filter",
+        const="offline",
+        help="List only users with offline devices",
+    )
 
     return parser
 

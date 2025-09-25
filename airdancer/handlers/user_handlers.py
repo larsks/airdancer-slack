@@ -316,6 +316,22 @@ class ListUsersCommand(BaseCommand):
         all_switches = self.database_service.get_all_switches()
         switch_status_map = {switch.switch_id: switch.status for switch in all_switches}
 
+        # Filter users based on --online or --offline flags
+        if parsed_args.filter:
+            filtered_users = []
+            for user in users_with_switches:
+                switch_status = switch_status_map.get(user.switch_id, "offline")
+                if parsed_args.filter == "online" and switch_status == "online":
+                    filtered_users.append(user)
+                elif parsed_args.filter == "offline" and switch_status == "offline":
+                    filtered_users.append(user)
+            users_with_switches = filtered_users
+
+            if not users_with_switches:
+                filter_desc = "online" if parsed_args.filter == "online" else "offline"
+                context.respond(f"No users with {filter_desc} switches found.")
+                return
+
         if parsed_args.short:
             self._list_users_concise(users_with_switches, switch_status_map, context)
         elif parsed_args.box:
